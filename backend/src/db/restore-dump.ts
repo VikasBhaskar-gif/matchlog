@@ -38,6 +38,11 @@ export async function ensureDatabaseSeeded() {
       console.warn("[DB] Migrations folder not found in candidates:", migrationCandidates);
     }
 
+    // Ensure display_name column exists if dump references it
+    try {
+      await sql.unsafe(`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "display_name" text;`);
+    } catch {}
+
     // 2. Check if VikasBhaskar and teams already exist
     const vikasExists = await sql`SELECT id FROM users WHERE username = 'VikasBhaskar'`;
     const teamsExist = await sql`SELECT count(*) FROM teams`;
