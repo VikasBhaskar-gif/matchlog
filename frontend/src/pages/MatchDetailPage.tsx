@@ -10,6 +10,7 @@ import { PotmPicker } from "../components/PotmPicker";
 import { MatchReviewsSection } from "../components/MatchReviewsSection";
 import { MatchPredictionsLeaderboard } from "../components/MatchPredictionsLeaderboard";
 import { formatKickoff, statusLabel, canRecordWatch, teamInitials, formatRound, formatMatchMinute } from "../lib/format";
+import { useLiveMatchClock } from "../hooks/useLiveMatchClock";
 import type { MatchEvent } from "../api/types";
 
 interface GoalMinuteItem {
@@ -88,9 +89,11 @@ export function MatchDetailPage() {
   if (isError || !data) return <ErrorState message="Couldn't load this match." onRetry={refetch} />;
 
   const { match } = data;
+  const liveClock = useLiveMatchClock(match?.kickoffAt, match?.status);
   const isBefore = match.status === "SCHEDULED";
   const isFinished = match.status === "FINISHED";
   const isLive = match.status === "LIVE";
+  const isPaused = match.status === "PAUSED";
   const canWatch = canRecordWatch(match);
 
   function invalidate() {
@@ -142,7 +145,11 @@ export function MatchDetailPage() {
           {isLive ? (
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/15 border border-rose-500/40 text-rose-400 text-xs font-black uppercase tracking-wider animate-live-glow">
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-              <span>{statusLabel(match.status)}</span>
+              <span>LIVE {liveClock.minuteText ? `· ${liveClock.minuteText}` : ""}</span>
+            </div>
+          ) : isPaused ? (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-400 text-xs font-black uppercase tracking-wider">
+              <span>HALF TIME</span>
             </div>
           ) : isFinished ? (
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.06] border border-white/10 text-slate-300 text-xs font-bold uppercase tracking-wider">
@@ -171,7 +178,7 @@ export function MatchDetailPage() {
 
           {/* Central Score Display */}
           <div className="text-center px-2">
-            {isFinished || isLive ? (
+            {isFinished || isLive || isPaused ? (
               <div className="flex flex-col items-center">
                 <div className="inline-flex items-center justify-center gap-3 sm:gap-4 px-4 py-2 rounded-2xl bg-black/40 border border-white/10 shadow-inner">
                   <span className="text-3xl sm:text-5xl font-black text-white tabular-nums tracking-tight">
@@ -182,16 +189,36 @@ export function MatchDetailPage() {
                     {match.awayScore ?? 0}
                   </span>
                 </div>
-                {match.homeScoreHalfTime !== null && match.awayScoreHalfTime !== null && (
-                  <span className="text-[11px] font-bold text-slate-400 mt-1.5 uppercase tracking-wider">
-                    HT: {match.homeScoreHalfTime} - {match.awayScoreHalfTime}
-                  </span>
-                )}
-                {isLive && (
-                  <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-400 mt-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                    Live Scorecard
-                  </span>
+
+                {/* Live Running Minute Clock / Half-time display */}
+                {isLive ? (
+                  <div className="flex flex-col items-center mt-2 space-y-0.5">
+                    <span className="text-lg sm:text-xl font-black font-mono text-emerald-400 tracking-wider tabular-nums drop-shadow-[0_0_12px_rgba(52,211,153,0.35)]">
+                      {liveClock.display}
+                    </span>
+                    {match.homeScoreHalfTime !== null && match.awayScoreHalfTime !== null && (
+                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        HT: {match.homeScoreHalfTime} - {match.awayScoreHalfTime}
+                      </span>
+                    )}
+                  </div>
+                ) : isPaused ? (
+                  <div className="flex flex-col items-center mt-2 space-y-0.5">
+                    <span className="text-sm sm:text-base font-black font-mono text-amber-400 tracking-wider uppercase">
+                      Half-time
+                    </span>
+                    {match.homeScoreHalfTime !== null && match.awayScoreHalfTime !== null && (
+                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        HT: {match.homeScoreHalfTime} - {match.awayScoreHalfTime}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  match.homeScoreHalfTime !== null && match.awayScoreHalfTime !== null && (
+                    <span className="text-[11px] font-bold text-slate-400 mt-1.5 uppercase tracking-wider">
+                      HT: {match.homeScoreHalfTime} - {match.awayScoreHalfTime}
+                    </span>
+                  )
                 )}
               </div>
             ) : (
