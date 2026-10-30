@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { useMatches, useMyFollows } from "../hooks/queries";
 import { MatchCard } from "../components/MatchCard";
 import { WatchModal } from "../components/WatchModal";
+import { PredictModal } from "../components/PredictModal";
 import { LoadingState, EmptyState, ErrorState } from "../components/States";
 import type { Match } from "../api/types";
 
@@ -19,6 +20,7 @@ export function HomePage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [watchTarget, setWatchTarget] = useState<Match | null>(null);
+  const [predictTarget, setPredictTarget] = useState<Match | null>(null);
 
   const follows = useMyFollows();
   const followed = useMatches({ followed: "true", status: "SCHEDULED", timeline: "upcoming" });
@@ -205,7 +207,7 @@ export function HomePage() {
           </div>
           <div className="space-y-3">
             {liveMatches.map((m) => (
-              <MatchCard key={m.id} match={m} onRecordWatch={setWatchTarget} />
+              <MatchCard key={m.id} match={m} onRecordWatch={setWatchTarget} onPredict={setPredictTarget} />
             ))}
           </div>
         </section>
@@ -244,7 +246,7 @@ export function HomePage() {
           </div>
           <div className="space-y-3">
             {yourTeamsMatches.map((m) => (
-              <MatchCard key={m.id} match={m} onRecordWatch={setWatchTarget} />
+              <MatchCard key={m.id} match={m} onRecordWatch={setWatchTarget} onPredict={setPredictTarget} />
             ))}
           </div>
         </section>
@@ -281,7 +283,7 @@ export function HomePage() {
                 </div>
                 <div className="space-y-3">
                   {matchList.map((m) => (
-                    <MatchCard key={m.id} match={m} onRecordWatch={setWatchTarget} />
+                    <MatchCard key={m.id} match={m} onRecordWatch={setWatchTarget} onPredict={setPredictTarget} />
                   ))}
                 </div>
               </div>
@@ -296,6 +298,18 @@ export function HomePage() {
           existingWatch={watchTarget.myWatch}
           onClose={() => setWatchTarget(null)}
           onSaved={invalidate}
+        />
+      )}
+
+      {predictTarget && (
+        <PredictModal
+          match={predictTarget}
+          existingPrediction={predictTarget.myPrediction}
+          onClose={() => setPredictTarget(null)}
+          onSaved={() => {
+            setPredictTarget(null);
+            invalidate();
+          }}
         />
       )}
     </div>

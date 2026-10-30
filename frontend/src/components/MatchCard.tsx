@@ -54,7 +54,15 @@ function formatTeamScorers(events?: MatchEvent[], teamId?: string | null): React
   );
 }
 
-export function MatchCard({ match, onRecordWatch }: { match: Match; onRecordWatch: (m: Match) => void }) {
+export function MatchCard({
+  match,
+  onRecordWatch,
+  onPredict,
+}: {
+  match: Match;
+  onRecordWatch: (m: Match) => void;
+  onPredict?: (m: Match) => void;
+}) {
   const cd = match.status === "SCHEDULED" ? countdown(match.kickoffAt) : null;
   const allowedToWatch = canRecordWatch(match);
 
@@ -123,11 +131,36 @@ export function MatchCard({ match, onRecordWatch }: { match: Match; onRecordWatc
         </span>
 
         <div className="flex items-center gap-2">
-          {match.myPrediction && (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white/[0.05] text-slate-300 border border-white/10">
-              🎯 Predicted
-            </span>
-          )}
+          {/* Predict Shortcut / Badge */}
+          {match.myPrediction ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onPredict?.(match);
+              }}
+              className="text-xs font-bold px-2.5 py-1.5 rounded-xl bg-purple-500/15 border border-purple-500/40 text-purple-300 hover:bg-purple-500/25 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+              title="Click to view or edit your prediction"
+            >
+              <span>🎯</span>
+              <span>Predicted {match.myPrediction.predictedHomeScore}–{match.myPrediction.predictedAwayScore}</span>
+            </button>
+          ) : match.status === "SCHEDULED" && onPredict ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onPredict(match);
+              }}
+              className="text-xs font-bold px-3 py-1.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 hover:text-purple-200 border border-purple-500/30 hover:border-purple-400/50 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+              title="Predict match score"
+            >
+              <span>🎯</span>
+              <span>Predict</span>
+            </button>
+          ) : null}
 
           {match.myWatch ? (
             <button

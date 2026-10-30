@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useMatches, useCompetitions, useMyFollows } from "../hooks/queries";
 import { MatchCard } from "../components/MatchCard";
 import { WatchModal } from "../components/WatchModal";
+import { PredictModal } from "../components/PredictModal";
 import { LoadingState, EmptyState, ErrorState } from "../components/States";
 import { sortCompetitions } from "../lib/competitions";
 import type { Match } from "../api/types";
@@ -96,6 +97,7 @@ export function MatchesPage() {
   const [debouncedSearch, setDebouncedSearch] = useState(initial.search);
   const [limit, setLimit] = useState(initial.limit);
   const [watchTarget, setWatchTarget] = useState<Match | null>(null);
+  const [predictTarget, setPredictTarget] = useState<Match | null>(null);
   const qc = useQueryClient();
 
   const isInitialMount = useRef(true);
@@ -424,7 +426,7 @@ export function MatchesPage() {
               </div>
               <div className="space-y-3">
                 {singleFollowedTeamsMatches.map((m) => (
-                  <MatchCard key={m.id} match={m} onRecordWatch={setWatchTarget} />
+                  <MatchCard key={m.id} match={m} onRecordWatch={setWatchTarget} onPredict={setPredictTarget} />
                 ))}
               </div>
             </div>
@@ -447,6 +449,7 @@ export function MatchesPage() {
                     key={group.competitionId}
                     group={group}
                     onRecordWatch={setWatchTarget}
+                    onPredict={setPredictTarget}
                   />
                 ))}
               </div>
@@ -469,6 +472,7 @@ export function MatchesPage() {
                     key={group.competitionId}
                     group={group}
                     onRecordWatch={setWatchTarget}
+                    onPredict={setPredictTarget}
                   />
                 ))}
               </div>
@@ -491,7 +495,7 @@ export function MatchesPage() {
               </div>
               <div className="space-y-6">
                 {allLiveGroups.map((group) => (
-                  <CompetitionMatchGroup key={group.competitionId} group={group} onRecordWatch={setWatchTarget} />
+                  <CompetitionMatchGroup key={group.competitionId} group={group} onRecordWatch={setWatchTarget} onPredict={setPredictTarget} />
                 ))}
               </div>
             </div>
@@ -508,7 +512,7 @@ export function MatchesPage() {
               </div>
               <div className="space-y-6">
                 {allUpcomingGroups.map((group) => (
-                  <CompetitionMatchGroup key={group.competitionId} group={group} onRecordWatch={setWatchTarget} />
+                  <CompetitionMatchGroup key={group.competitionId} group={group} onRecordWatch={setWatchTarget} onPredict={setPredictTarget} />
                 ))}
               </div>
             </div>
@@ -525,7 +529,7 @@ export function MatchesPage() {
               </div>
               <div className="space-y-6">
                 {allFinishedGroups.map((group) => (
-                  <CompetitionMatchGroup key={group.competitionId} group={group} onRecordWatch={setWatchTarget} />
+                  <CompetitionMatchGroup key={group.competitionId} group={group} onRecordWatch={setWatchTarget} onPredict={setPredictTarget} />
                 ))}
               </div>
             </div>
@@ -560,6 +564,21 @@ export function MatchesPage() {
           }}
         />
       )}
+
+      {predictTarget && (
+        <PredictModal
+          match={predictTarget}
+          existingPrediction={predictTarget.myPrediction}
+          onClose={() => setPredictTarget(null)}
+          onSaved={() => {
+            setPredictTarget(null);
+            qc.invalidateQueries({ queryKey: ["matches"] });
+            qc.invalidateQueries({ queryKey: ["match", predictTarget.id] });
+            qc.invalidateQueries({ queryKey: ["predictions"] });
+            qc.invalidateQueries({ queryKey: ["stats"] });
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -567,9 +586,11 @@ export function MatchesPage() {
 function CompetitionMatchGroup({
   group,
   onRecordWatch,
+  onPredict,
 }: {
   group: Group;
   onRecordWatch: (m: Match) => void;
+  onPredict?: (m: Match) => void;
 }) {
   return (
     <div className="space-y-3">
@@ -587,7 +608,7 @@ function CompetitionMatchGroup({
       </div>
       <div className="space-y-3">
         {group.matches.map((m) => (
-          <MatchCard key={m.id} match={m} onRecordWatch={onRecordWatch} />
+          <MatchCard key={m.id} match={m} onRecordWatch={onRecordWatch} onPredict={onPredict} />
         ))}
       </div>
     </div>
