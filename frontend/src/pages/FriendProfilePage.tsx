@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { useUserProfile } from "../hooks/queries";
+import { useUserProfile, useStats, useLeaderboard } from "../hooks/queries";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
 import { LoadingState, ErrorState } from "../components/States";
@@ -13,6 +13,8 @@ export function FriendProfilePage() {
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   const { data, isLoading, isError, refetch } = useUserProfile(id);
+  const userStats = useStats("all-time", id);
+  const leaderboard = useLeaderboard("minutes", "all-time");
   const qc = useQueryClient();
   const [actionPending, setActionPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -24,6 +26,10 @@ export function FriendProfilePage() {
   const p = data.profile;
   const isMe = currentUser?.id === p.id;
   const supportedTeamStyle = p.supportedTeam ? getClubStyle(p.supportedTeam.name) : null;
+
+  const position = leaderboard.data?.entries.findIndex((e) => e.userId === id);
+  const rank = position !== undefined && position >= 0 ? position + 1 : null;
+  const mostWatched = userStats.data?.watching.mostWatchedTeam;
 
   async function handleSendRequest() {
     if (!id || actionPending || isMe) return;
@@ -311,36 +317,56 @@ export function FriendProfilePage() {
       {activeTab === "overview" && (
         <div className="space-y-6">
           <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur-md shadow-lg grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-            <div className="p-2">
-              <p className="text-2xl font-black tabular-nums tracking-tight text-emerald-400">
-                {p.totalMatches ?? 0}
-              </p>
+            <div className="flex flex-col items-center justify-center p-2">
+              <div className="text-2xl font-black tabular-nums tracking-tight min-h-[32px] flex items-center justify-center text-emerald-400">
+                {p.totalMatches ?? userStats.data?.watching.totalMatches ?? 0}
+              </div>
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-tight mt-0.5">
                 Matches Watched
               </p>
             </div>
-            <div className="p-2">
-              <p className="text-2xl font-black tabular-nums tracking-tight text-cyan-400">
-                {(p.totalMinutes ?? 0).toLocaleString()}'
-              </p>
+            <div className="flex flex-col items-center justify-center p-2">
+              <div className="text-2xl font-black tabular-nums tracking-tight min-h-[32px] flex items-center justify-center text-cyan-400">
+                {(p.totalMinutes ?? userStats.data?.watching.totalMinutes ?? 0).toLocaleString()}'
+              </div>
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-tight mt-0.5">
                 Minutes Watched
               </p>
             </div>
-            <div className="p-2">
-              <p className="text-2xl font-black tabular-nums tracking-tight text-amber-400">
-                {p.currentStreak ?? 0} 🔥
-              </p>
+            <div className="flex flex-col items-center justify-center p-2">
+              <div className="text-2xl font-black tabular-nums tracking-tight min-h-[32px] flex items-center justify-center text-emerald-400">
+                {mostWatched ? (
+                  <Link
+                    to={`/teams/${mostWatched.id}`}
+                    viewTransition
+                    className="inline-flex items-center justify-center gap-1.5 hover:text-emerald-300 transition-colors max-w-full px-1"
+                    title={`${mostWatched.name} (${mostWatched.matches} ${mostWatched.matches === 1 ? 'match' : 'matches'})`}
+                  >
+                    {mostWatched.logoUrl && (
+                      <img
+                        src={mostWatched.logoUrl}
+                        alt=""
+                        className="w-5 h-5 object-contain inline flex-shrink-0"
+                      />
+                    )}
+                    <span className="truncate max-w-[110px] text-base font-extrabold text-white hover:text-emerald-400">
+                      {mostWatched.name}
+                    </span>
+                  </Link>
+                ) : (
+                  "—"
+                )}
+              </div>
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-tight mt-0.5">
-                Active Streak
+                Most Watched Club
               </p>
             </div>
-            <div className="p-2">
-              <p className="text-2xl font-black tabular-nums tracking-tight text-purple-400">
-                {p.longestStreak ?? 0}
-              </p>
+            <div className="flex flex-col items-center justify-center p-2">
+              <div className="text-2xl font-black tabular-nums tracking-tight min-h-[32px] flex items-center justify-center text-amber-400">
+                {rank ? `#${rank}` : "—"}
+              </div>
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-tight mt-0.5">
-                Longest Streak
+                Global Rank
               </p>
             </div>
           </div>
