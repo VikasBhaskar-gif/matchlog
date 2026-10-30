@@ -58,8 +58,9 @@ export function MatchCard({ match, onRecordWatch }: { match: Match; onRecordWatc
   const cd = match.status === "SCHEDULED" ? countdown(match.kickoffAt) : null;
   const allowedToWatch = canRecordWatch(match);
 
-  const homeScorers = formatTeamScorers(match.events, match.homeTeamId);
-  const awayScorers = formatTeamScorers(match.events, match.awayTeamId);
+  const isFinished = match.status === "FINISHED";
+  const homeScorers = isFinished ? formatTeamScorers(match.events, match.homeTeamId) : null;
+  const awayScorers = isFinished ? formatTeamScorers(match.events, match.awayTeamId) : null;
 
   const isLive = match.status === "LIVE";
 

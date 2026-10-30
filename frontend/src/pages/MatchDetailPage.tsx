@@ -107,7 +107,7 @@ export function MatchDetailPage() {
   const events = match.events ?? [];
   const homeGoalGroups = groupGoalsByPlayer(events, match.homeTeamId);
   const awayGoalGroups = groupGoalsByPlayer(events, match.awayTeamId);
-  const hasGoals = homeGoalGroups.length > 0 || awayGoalGroups.length > 0;
+  const hasGoals = isFinished && (homeGoalGroups.length > 0 || awayGoalGroups.length > 0);
 
   return (
     <div className="p-4 sm:p-6 max-w-3xl mx-auto space-y-6">
@@ -258,6 +258,16 @@ export function MatchDetailPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Live Match Notification */}
+        {isLive && (
+          <div className="pt-3 pb-1 my-3 border-t border-white/10 text-center">
+            <span className="text-[11px] text-slate-400 font-medium inline-flex items-center gap-1.5">
+              <span>⚡</span>
+              <span>Live scorecard in progress · Goalscorer breakdown verified at full-time</span>
+            </span>
           </div>
         )}
 

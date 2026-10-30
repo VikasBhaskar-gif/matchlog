@@ -136,17 +136,35 @@ export default async function matchRoutes(app: FastifyInstance) {
   });
 
   app.get<{ Params: { id: string } }>("/api/matches/:id", async (request, reply) => {
-    const match = await db.query.matches.findFirst({ where: eq(matches.id, request.params.id) });
+    let match = await db.query.matches.findFirst({ where: eq(matches.id, request.params.id) });
     if (!match) {
       reply.code(404).send({ error: "Match not found." });
       return;
     }
+
+    // If match is in a live window, trigger a fast on-demand sync if older than 12s
+    const isLiveWindow =
+      match.status === "LIVE" ||
+      match.status === "PAUSED" ||
+      (match.status === "SCHEDULED" && new Date(match.kickoffAt).getTime() <= Date.now());
+
+    const isStale = !match.lastSyncedAt || Date.now() - new Date(match.lastSyncedAt).getTime() > 12_000;
+
+    if (isLiveWindow && isStale) {
+      const { syncLiveMatchScores } = await import("../football/realtime-worker.js");
+      await syncLiveMatchScores().catch(() => {});
+      const refreshed = await db.query.matches.findFirst({ where: eq(matches.id, request.params.id) });
+      if (refreshed) match = refreshed;
+    }
+
     const [enriched] = await enrichMatches([match], request.currentUser?.id);
 
-    // If finished or live match has goals but no events yet, generate them on-the-fly
-    if (
+    // For live matches, never output speculative/mock goalscorers
+    if (match.status === "LIVE" || match.status === "PAUSED") {
+      enriched.events = [];
+    } else if (
       enriched.events.length === 0 &&
-      (match.status === "FINISHED" || match.status === "LIVE") &&
+      match.status === "FINISHED" &&
       ((match.homeScore ?? 0) > 0 || (match.awayScore ?? 0) > 0)
     ) {
       enriched.events = await getOrGenerateMatchEvents(match.id);

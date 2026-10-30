@@ -64,7 +64,7 @@ export async function getOrGenerateMatchEvents(matchId: string): Promise<MatchGo
   });
 
   if (!match) return [];
-  if (match.status !== "FINISHED" && match.status !== "LIVE") return [];
+  if (match.status !== "FINISHED") return [];
 
   const homeScore = match.homeScore ?? 0;
   const awayScore = match.awayScore ?? 0;
@@ -152,7 +152,7 @@ export async function getOrGenerateMatchEvents(matchId: string): Promise<MatchGo
   const prng = createPrng(hashString(match.id));
 
   // Determine realistic minutes
-  const maxMinute = match.status === "LIVE" ? 75 : 90;
+  const maxMinute = 90;
   const minutePool = new Set<number>();
   while (minutePool.size < totalGoals) {
     const min = Math.floor(prng() * (maxMinute - 4)) + 4; // between 4' and maxMinute

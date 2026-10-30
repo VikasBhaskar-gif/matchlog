@@ -1,5 +1,5 @@
 import { db } from "../db/client.js";
-import { matches, teams } from "../db/schema/index.js";
+import { matches, teams, matchEvents } from "../db/schema/index.js";
 import { and, eq, lt, lte, gte, or, ilike } from "drizzle-orm";
 import { processFinishedMatchPredictions } from "../sync/process-predictions.js";
 import { env } from "../lib/env.js";
@@ -173,6 +173,10 @@ export async function syncLiveMatchScores() {
           })
           .where(eq(matches.id, dbMatch.id));
 
+        if (newStatus === "LIVE" || newStatus === "PAUSED") {
+          await db.delete(matchEvents).where(eq(matchEvents.matchId, dbMatch.id)).catch(() => {});
+        }
+
         updatedCount++;
         console.log(`[realtime-worker] Updated ${m.homeTeam.name} vs ${m.awayTeam.name}: ${newStatus} (${homeScore}-${awayScore})`);
       }
@@ -229,10 +233,10 @@ export function startRealtimeStatusWorker() {
   // Run once immediately on server startup
   checkRealtimeMatchStatuses().catch((e) => console.error("[realtime-worker] initial run failed", e));
 
-  // Run periodic live sync every 60 seconds (well within the 10 req/min free limit)
+  // Run periodic live sync every 20 seconds (well within the 10 req/min free limit)
   const timer = setInterval(() => {
     checkRealtimeMatchStatuses().catch((e) => console.error("[realtime-worker] periodic check failed", e));
-  }, 60_000);
+  }, 20_000);
 
   return () => clearInterval(timer);
 }
