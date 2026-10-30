@@ -16,8 +16,6 @@ const NAV_ITEMS = [
   { to: "/stats", label: "My Stats", icon: "📊" },
 ];
 
-const MOBILE_NAV_ITEMS = ["/matches", "/leagues", "/teams", "/players", "/stats"];
-
 export function AppLayout() {
   const { user, loading } = useAuth();
   const location = useLocation();
@@ -33,6 +31,41 @@ export function AppLayout() {
       {!user.onboardingCompleted && (
         <SupportedTeamModal isOpen={true} isOnboarding={true} />
       )}
+
+      {/* Mobile Top Header (Mobile only: sm:hidden) */}
+      <header className="sm:hidden sticky top-0 z-40 bg-[#080b10]/95 backdrop-blur-md border-b border-white/[0.08] px-4 py-2.5 flex items-center justify-between shrink-0 shadow-sm">
+        <NavLink to="/matches" className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-emerald-500/20 to-teal-400/20 border border-emerald-500/40 flex items-center justify-center text-sm shadow-[0_0_12px_rgba(16,185,129,0.25)]">
+            ⚽
+          </div>
+          <span className="text-base font-black tracking-tight text-white">
+            Match<span className="text-emerald-400">log</span>
+          </span>
+        </NavLink>
+
+        <NavLink
+          to="/profile"
+          viewTransition
+          className={({ isActive }) =>
+            `flex items-center gap-2 py-1 px-2.5 rounded-full border transition-all ${
+              isActive
+                ? "bg-emerald-500/15 border-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.25)] text-emerald-400"
+                : "bg-white/[0.04] border-white/10 hover:border-white/20 text-slate-200"
+            }`
+          }
+        >
+          <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center font-black text-[11px] text-black shrink-0 overflow-hidden ring-1 ring-white/20">
+            {user.avatar ? (
+              <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
+            ) : (
+              user.username[0]?.toUpperCase()
+            )}
+          </div>
+          <span className="text-xs font-bold max-w-[110px] truncate">
+            {user.username}
+          </span>
+        </NavLink>
+      </header>
 
       {/* Fixed viewport-height desktop sidebar */}
       <nav className="hidden sm:flex sm:flex-col w-60 shrink-0 border-r border-white/[0.08] h-full p-4 bg-[#0c1017]/80 backdrop-blur-xl">
@@ -130,32 +163,34 @@ export function AppLayout() {
         </div>
       </main>
 
-      {/* Floating frosted-glass mobile bottom dock */}
-      <nav className="sm:hidden fixed bottom-3 left-3 right-3 z-50 glass-panel rounded-2xl border border-white/10 shadow-[0_12px_36px_rgba(0,0,0,0.8)] px-2 py-1.5 flex justify-around items-center">
-        {NAV_ITEMS.filter((item) => MOBILE_NAV_ITEMS.includes(item.to)).map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            viewTransition
-            className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition-all duration-150 relative ${
-                isActive
-                  ? "text-emerald-400 scale-105"
-                  : "text-slate-400 hover:text-slate-200"
-              }`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <span className="text-base select-none leading-none">{item.icon}</span>
-                <span className="text-[10px] font-bold tracking-tight">{item.label}</span>
-                {isActive && (
-                  <span className="absolute -bottom-1 w-1 h-1 rounded-full bg-emerald-400" />
-                )}
-              </>
-            )}
-          </NavLink>
-        ))}
+      {/* Floating frosted-glass mobile bottom dock (horizontally scrollable for all items) */}
+      <nav className="sm:hidden fixed bottom-3 left-2 right-2 z-50 glass-panel rounded-2xl border border-white/10 shadow-[0_12px_36px_rgba(0,0,0,0.85)] px-1.5 py-1.5 flex items-center overflow-x-auto no-scrollbar scroll-smooth touch-pan-x">
+        <div className="flex items-center gap-1 min-w-max mx-auto px-1">
+          {NAV_ITEMS.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              viewTransition
+              className={({ isActive }) =>
+                `flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-all duration-150 shrink-0 relative ${
+                  isActive
+                    ? "text-emerald-400 scale-105 bg-white/[0.06]"
+                    : "text-slate-400 hover:text-slate-200 active:scale-95"
+                }`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <span className="text-base select-none leading-none">{item.icon}</span>
+                  <span className="text-[10px] font-bold tracking-tight whitespace-nowrap">{item.label}</span>
+                  {isActive && (
+                    <span className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-emerald-400 shadow-[0_0_6px_#10b981]" />
+                  )}
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
       </nav>
     </div>
   );

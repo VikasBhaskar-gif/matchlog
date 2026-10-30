@@ -166,3 +166,12 @@ body {
     transition: none !important;
   }
 }
+
+/* Hide scrollbar utility for smooth horizontal scrolling on mobile */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
