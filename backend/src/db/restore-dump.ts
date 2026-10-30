@@ -38,15 +38,20 @@ export async function ensureDatabaseSeeded() {
       console.warn("[DB] Migrations folder not found in candidates:", migrationCandidates);
     }
 
-    // 2. Check if VikasBhaskar already exists
+    // 2. Check if VikasBhaskar and teams already exist
     const vikasExists = await sql`SELECT id FROM users WHERE username = 'VikasBhaskar'`;
-    if (vikasExists.length > 0) {
-      console.log("[DB] Database already contains VikasBhaskar. Skipping data import.");
-      return { ok: true, skipped: true, reason: "VikasBhaskar exists" };
+    const teamsExist = await sql`SELECT count(*) FROM teams`;
+    const teamCount = parseInt(teamsExist[0]?.count ?? "0", 10);
+    const vikasHash = "$argon2id$v=19$m=65536,t=3,p=4$NGhsYhkTDkrau9PG7tjWYg$oSv7AF9Cu0aDA1wFHTH0diYI5mdXJLtmgo28gFmAf60";
+
+    if (vikasExists.length > 0 && teamCount > 0) {
+      console.log("[DB] Database already contains VikasBhaskar and teams. Ensuring password is up to date.");
+      await sql`UPDATE users SET password_hash = ${vikasHash} WHERE username = 'VikasBhaskar'`;
+      return { ok: true, skipped: true, reason: "VikasBhaskar and teams already exist; password updated to amaterasu17" };
     }
 
-    // 3. Database is empty, import data_dump.sql
-    console.log("[DB] Database is empty. Importing initial data...");
+    // 3. Database is missing VikasBhaskar or core teams, import data_dump.sql
+    console.log("[DB] Importing initial data dump...");
     const dumpCandidates = [
       path.resolve(__dirname, "data_dump.sql"),
       path.resolve(__dirname, "db/data_dump.sql"),
@@ -68,21 +73,70 @@ export async function ensureDatabaseSeeded() {
     console.log("[DB] Reading data dump from:", dumpPath);
     const rawSql = fs.readFileSync(dumpPath, "utf-8");
 
-    const statements = rawSql
+    // Filter out comment lines so the first statement of every table isn't dropped!
+    const cleanSql = rawSql
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("--"))
+      .join("\n");
+
+    const rawStatements = cleanSql
       .split(/;\r?\n/)
       .map((s) => s.trim())
       .filter((s) => s.startsWith("INSERT INTO public."))
       .map((s) => (s.endsWith(";") ? s.slice(0, -1) : s) + " ON CONFLICT DO NOTHING;");
 
-    console.log(`[DB] Found ${statements.length} INSERT statements to execute in batches...`);
-    const batchSize = 100;
-    for (let i = 0; i < statements.length; i += batchSize) {
-      const batch = statements.slice(i, i + batchSize).join("\n");
-      await sql.unsafe(batch);
+    const TABLE_INSERT_ORDER = [
+      "public.competitions",
+      "public.seasons",
+      "public.competition_seasons",
+      "public.teams",
+      "public.users",
+      "public.followed_competitions",
+      "public.players",
+      "public.followed_players",
+      "public.followed_teams",
+      "public.matches",
+      "public.match_events",
+      "public.match_players",
+      "public.watched_matches",
+      "public.player_of_match_votes",
+      "public.match_reviews",
+      "public.friend_activities",
+      "public.sessions",
+      "public.sync_logs",
+    ];
+
+    const stmtsByTable = new Map<string, string[]>();
+    for (const table of TABLE_INSERT_ORDER) {
+      stmtsByTable.set(table, []);
     }
 
-    console.log("[DB] Data dump successfully imported!");
-    return { ok: true, importedStatements: statements.length, dumpPath };
+    for (const stmt of rawStatements) {
+      const m = stmt.match(/^INSERT INTO (public\.\w+)/);
+      if (m && stmtsByTable.has(m[1])) {
+        stmtsByTable.get(m[1])!.push(stmt);
+      }
+    }
+
+    const batchSize = 100;
+    let totalImported = 0;
+    for (const table of TABLE_INSERT_ORDER) {
+      const stmts = stmtsByTable.get(table) || [];
+      if (stmts.length === 0) continue;
+      console.log(`[DB] Seeding ${table} (${stmts.length} rows)...`);
+      for (let i = 0; i < stmts.length; i += batchSize) {
+        const batch = stmts.slice(i, i + batchSize).join("\n");
+        await sql.unsafe(batch);
+      }
+      totalImported += stmts.length;
+    }
+
+    console.log(`[DB] Successfully imported ${totalImported} statements across all tables!`);
+
+    await sql`UPDATE users SET password_hash = ${vikasHash} WHERE username = 'VikasBhaskar'`;
+    console.log("[DB] Ensured VikasBhaskar password is set to amaterasu17.");
+
+    return { ok: true, importedStatements: totalImported, dumpPath };
   } catch (err) {
     console.error("[DB] Migration / seeding error:", err);
     throw err;
