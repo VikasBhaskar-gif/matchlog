@@ -29,6 +29,9 @@ import meRoutes from "./routes/me.routes.js";
 import friendsRoutes from "./routes/friends.routes.js";
 import reviewRoutes from "./routes/reviews.routes.js";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 export async function buildApp() {
   const app = Fastify({
     bodyLimit: 5242880, // 5MB limit for uploads (e.g. avatars)
@@ -187,8 +190,6 @@ export async function buildApp() {
     }
   });
 
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
   const distCandidates = [
     path.resolve(__dirname, "../../frontend/dist"),
     path.resolve(process.cwd(), "frontend/dist"),

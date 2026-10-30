@@ -3,7 +3,6 @@ services:
     name: matchlog
     runtime: node
     plan: free
-    region: frankfurt
     buildCommand: npm run build
     startCommand: npm start
     envVars:
@@ -19,6 +18,5 @@ services:
 databases:
   - name: matchlog-db
     plan: free
-    region: frankfurt
     databaseName: matchlog
     user: matchlog
