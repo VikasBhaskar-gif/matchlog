@@ -3,18 +3,23 @@ import { env } from "./lib/env.js";
 import { startRealtimeStatusWorker } from "./football/realtime-worker.js";
 import { ensureDatabaseSeeded } from "./db/restore-dump.js";
 
-// Ensure database is populated with teams, matches, and VikasBhaskar user
-await ensureDatabaseSeeded();
-
 const app = await buildApp();
 
-app
-  .listen({ port: env.PORT, host: "0.0.0.0" })
-  .then(() => {
-    app.log.info(`Matchlog API listening on port ${env.PORT}`);
-    startRealtimeStatusWorker();
-  })
-  .catch((err) => {
-    app.log.error(err);
-    process.exit(1);
-  });
+try {
+  await app.listen({ port: env.PORT, host: "0.0.0.0" });
+  app.log.info(`Matchlog API listening on port ${env.PORT}`);
+
+  // Seed database in background so port binds immediately and passes healthcheck
+  ensureDatabaseSeeded()
+    .then((res) => {
+      app.log.info({ res }, "[DB] Database seeding completed successfully");
+    })
+    .catch((err) => {
+      app.log.error(err, "[DB] Database seeding encountered an error");
+    });
+
+  startRealtimeStatusWorker();
+} catch (err) {
+  app.log.error(err);
+  process.exit(1);
+}
