@@ -155,7 +155,7 @@ function TeamRow({ team, following }: { team: Team; following: boolean }) {
           View fixtures →
         </span>
         <button
-          onClick={(e) => {
+          onClick={(e: React.MouseEvent) => {
             e.stopPropagation();
             toggle();
           }}
