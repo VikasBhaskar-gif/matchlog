@@ -19,5 +19,6 @@ services:
 databases:
   - name: matchlog-db
     plan: free
+    region: frankfurt
     databaseName: matchlog
     user: matchlog
