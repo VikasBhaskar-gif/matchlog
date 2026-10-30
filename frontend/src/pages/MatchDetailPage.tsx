@@ -145,7 +145,7 @@ export function MatchDetailPage() {
           {isLive ? (
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/15 border border-rose-500/40 text-rose-400 text-xs font-black uppercase tracking-wider animate-live-glow">
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-              <span>LIVE {liveClock.minuteText ? `· ${liveClock.minuteText}` : ""}</span>
+              <span>LIVE</span>
             </div>
           ) : isPaused ? (
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-400 text-xs font-black uppercase tracking-wider">

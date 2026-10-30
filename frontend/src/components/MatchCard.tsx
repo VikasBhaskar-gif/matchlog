@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { Match, MatchEvent } from "../api/types";
 import { formatKickoff, countdown, teamInitials, statusLabel, canRecordWatch, formatRound, formatMatchMinute } from "../lib/format";
-import { useLiveMatchClock } from "../hooks/useLiveMatchClock";
 
 interface ScorerItem {
   minute: number;
@@ -94,7 +93,7 @@ export function MatchCard({
           <span>{match.competition?.name ?? "Competition"}</span>
           {match.round && <span className="text-slate-600">· {formatRound(match.round)}</span>}
         </Link>
-        <StatusPill status={match.status} kickoffAt={match.kickoffAt} />
+        <StatusPill status={match.status} />
       </div>
 
       {/* Main Scoreboard Clickable Area */}
@@ -242,14 +241,12 @@ function TeamRow({
   );
 }
 
-function StatusPill({ status, kickoffAt }: { status: string; kickoffAt?: string | Date }) {
-  const liveClock = useLiveMatchClock(kickoffAt, status);
-
+function StatusPill({ status }: { status: string }) {
   if (status === "LIVE") {
     return (
       <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 text-[10px] font-black tracking-wider animate-live-glow">
         <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping" />
-        <span>LIVE {liveClock.minuteText ? `· ${liveClock.minuteText}` : ""}</span>
+        <span>LIVE</span>
       </span>
     );
   }

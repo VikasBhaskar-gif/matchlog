@@ -157,6 +157,19 @@ export default async function matchRoutes(app: FastifyInstance) {
       if (refreshed) match = refreshed;
     }
 
+    // Auto-transition to FINISHED if match has passed expected duration (105m+) with valid scores
+    if (
+      (match.status === "LIVE" || match.status === "PAUSED") &&
+      Date.now() - new Date(match.kickoffAt).getTime() > 105 * 60 * 1000 &&
+      match.homeScore !== null &&
+      match.awayScore !== null
+    ) {
+      await db.update(matches).set({ status: "FINISHED", updatedAt: new Date() }).where(eq(matches.id, match.id));
+      match.status = "FINISHED";
+      const { processFinishedMatchPredictions } = await import("../sync/process-predictions.js");
+      await processFinishedMatchPredictions().catch(() => {});
+    }
+
     const [enriched] = await enrichMatches([match], request.currentUser?.id);
 
     // For live matches, never output speculative/mock goalscorers

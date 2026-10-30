@@ -7,7 +7,6 @@ import { api } from "../api/client";
 import { LoadingState, EmptyState, ErrorState } from "../components/States";
 import { PlayerAvatar } from "../components/PlayerAvatar";
 import { formatDateTimeline, formatTimeShort, formatPosition } from "../lib/format";
-import { useLiveMatchClock } from "../hooks/useLiveMatchClock";
 import type { Match } from "../api/types";
 
 export function TeamDetailPage() {
@@ -538,7 +537,7 @@ export function TeamDetailPage() {
                             <span>{m.awayScore ?? 0}</span>
                           </div>
                         ) : isLive ? (
-                          <LiveMatchRowScore kickoffAt={m.kickoffAt} homeScore={m.homeScore} awayScore={m.awayScore} />
+                          <LiveMatchRowScore homeScore={m.homeScore} awayScore={m.awayScore} />
                         ) : isCancelled ? (
                           <span className="text-[11px] font-bold text-rose-400 uppercase bg-rose-500/10 px-2 py-0.5 rounded">
                             {m.status}
@@ -598,20 +597,16 @@ export function TeamDetailPage() {
 }
 
 function LiveMatchRowScore({
-  kickoffAt,
   homeScore,
   awayScore,
 }: {
-  kickoffAt: string;
   homeScore: number | null;
   awayScore: number | null;
 }) {
-  const clock = useLiveMatchClock(kickoffAt, "LIVE");
   return (
     <div className="bg-rose-500/20 border border-rose-500/40 text-rose-400 font-black text-xs px-2.5 py-0.5 rounded-lg flex items-center gap-1.5 tabular-nums">
       <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping"></span>
       <span>{homeScore ?? 0} : {awayScore ?? 0}</span>
-      <span className="text-emerald-400 font-mono text-[10px] font-bold">({clock.minuteText})</span>
     </div>
   );
 }

@@ -137,6 +137,19 @@ export async function syncLiveMatchScores() {
           break;
       }
 
+      const hasWinner = m.score?.winner !== null && m.score?.winner !== undefined;
+      const hasFullTime = m.score?.fullTime?.home !== null && m.score?.fullTime?.home !== undefined;
+      const isPastExpectedEndTime = Date.now() - new Date(dbMatch.kickoffAt).getTime() > 105 * 60 * 1000;
+
+      if (
+        m.status === "FINISHED" ||
+        m.status === "AWARDED" ||
+        (hasWinner && hasFullTime) ||
+        (isPastExpectedEndTime && hasFullTime)
+      ) {
+        newStatus = "FINISHED";
+      }
+
       const homeScore = m.score?.fullTime?.home ?? m.score?.halfTime?.home ?? dbMatch.homeScore;
       const awayScore = m.score?.fullTime?.away ?? m.score?.halfTime?.away ?? dbMatch.awayScore;
       const homeScoreHalfTime = m.score?.halfTime?.home ?? dbMatch.homeScoreHalfTime;

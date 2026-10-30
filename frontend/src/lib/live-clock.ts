@@ -96,12 +96,9 @@ export function getLiveMatchTime(
   }
 
   // 2nd half stoppage: 90m onwards
-  const stoppageSecs = Math.min(15 * 60, totalMatchSecs - 90 * 60);
-  const stoppageMins = Math.floor(stoppageSecs / 60);
-  const display = `90:${String(stoppageSecs % 60).padStart(2, "0")}`;
   return {
-    display,
-    minuteText: `90+${stoppageMins + 1}'`,
+    display: "90:00+",
+    minuteText: "90+'",
     minute: 90,
     phase: "2H",
   };
