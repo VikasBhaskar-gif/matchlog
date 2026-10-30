@@ -184,6 +184,12 @@ export default async function matchRoutes(app: FastifyInstance) {
 
     return { match: enriched, lineup, communityPotm };
   });
+
+  app.post("/api/matches/sync-live", async () => {
+    const { syncLiveMatchScores } = await import("../football/realtime-worker.js");
+    const result = await syncLiveMatchScores();
+    return result;
+  });
 }
 
 async function enrichMatches(rows: (typeof matches.$inferSelect)[], userId?: string) {

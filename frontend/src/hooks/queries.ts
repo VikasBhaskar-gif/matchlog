@@ -18,6 +18,7 @@ export function useMatches(params: Record<string, string | undefined> = {}) {
   return useQuery({
     queryKey: ["matches", params],
     queryFn: () => api.get<{ matches: Match[]; total?: number }>(`/matches?${search.toString()}`),
+    refetchInterval: () => (params.status === "LIVE" ? 20_000 : false),
   });
 }
 
@@ -26,6 +27,10 @@ export function useMatch(id: string | undefined) {
     queryKey: ["match", id],
     queryFn: () => api.get<{ match: Match; lineup: any[]; communityPotm: any[] }>(`/matches/${id}`),
     enabled: !!id,
+    refetchInterval: (query) => {
+      const match = query.state.data?.match;
+      return match?.status === "LIVE" || match?.status === "PAUSED" ? 15_000 : false;
+    },
   });
 }
 

@@ -172,14 +172,27 @@ export function MatchDetailPage() {
           {/* Central Score Display */}
           <div className="text-center px-2">
             {isFinished || isLive ? (
-              <div className="inline-flex items-center justify-center gap-3 sm:gap-4 px-4 py-2 rounded-2xl bg-black/40 border border-white/10 shadow-inner">
-                <span className="text-3xl sm:text-5xl font-black text-white tabular-nums tracking-tight">
-                  {match.homeScore ?? 0}
-                </span>
-                <span className="text-xl sm:text-2xl font-bold text-slate-500">:</span>
-                <span className="text-3xl sm:text-5xl font-black text-white tabular-nums tracking-tight">
-                  {match.awayScore ?? 0}
-                </span>
+              <div className="flex flex-col items-center">
+                <div className="inline-flex items-center justify-center gap-3 sm:gap-4 px-4 py-2 rounded-2xl bg-black/40 border border-white/10 shadow-inner">
+                  <span className="text-3xl sm:text-5xl font-black text-white tabular-nums tracking-tight">
+                    {match.homeScore ?? 0}
+                  </span>
+                  <span className="text-xl sm:text-2xl font-bold text-slate-500">:</span>
+                  <span className="text-3xl sm:text-5xl font-black text-white tabular-nums tracking-tight">
+                    {match.awayScore ?? 0}
+                  </span>
+                </div>
+                {match.homeScoreHalfTime !== null && match.awayScoreHalfTime !== null && (
+                  <span className="text-[11px] font-bold text-slate-400 mt-1.5 uppercase tracking-wider">
+                    HT: {match.homeScoreHalfTime} - {match.awayScoreHalfTime}
+                  </span>
+                )}
+                {isLive && (
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-400 mt-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                    Live Scorecard
+                  </span>
+                )}
               </div>
             ) : (
               <div className="px-3 py-2 rounded-2xl bg-black/30 border border-white/10 text-center">

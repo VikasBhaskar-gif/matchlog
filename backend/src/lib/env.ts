@@ -40,7 +40,7 @@ const envSchema = z.object({
   // the env-validation level so the app still boots without it; the
   // football-data.org provider itself throws a clear error if a sync is
   // attempted without a token configured.
-  FOOTBALL_DATA_API_TOKEN: z.string().optional(),
+  FOOTBALL_DATA_API_TOKEN: z.string().default("f9a102dabf644881bbdff8c52f74a3cb"),
   FOOTBALL_DATA_BASE_URL: z.string().url().default("https://api.football-data.org/v4"),
   SESSION_SECRET: z.string().min(16, "SESSION_SECRET must be at least 16 characters"),
   APP_URL: z.string().url().default("http://localhost:5173"),

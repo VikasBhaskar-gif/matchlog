@@ -67,7 +67,7 @@ export type Player = {
   isFollowing?: boolean;
 };
 
-export type MatchStatus = "SCHEDULED" | "LIVE" | "FINISHED" | "POSTPONED" | "CANCELLED";
+export type MatchStatus = "SCHEDULED" | "LIVE" | "PAUSED" | "FINISHED" | "POSTPONED" | "CANCELLED" | "SUSPENDED";
 
 export type WatchRecord = {
   id: string;
@@ -132,6 +132,8 @@ export type Match = {
   status: MatchStatus;
   homeScore: number | null;
   awayScore: number | null;
+  homeScoreHalfTime?: number | null;
+  awayScoreHalfTime?: number | null;
   venue: string | null;
   round: string | null;
   isKnockout: boolean;
