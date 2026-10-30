@@ -85,7 +85,7 @@ export function getLevelForXp(totalXp: number): {
 // Prediction scoring
 // ---------------------------------------------------------------------------
 export function scorePrediction(input: {
-  predictedOutcome: "HOME" | "DRAW" | "AWAY";
+  predictedOutcome?: "HOME" | "DRAW" | "AWAY";
   predictedHomeScore: number;
   predictedAwayScore: number;
   actualHomeScore: number;
@@ -100,19 +100,43 @@ export function scorePrediction(input: {
       ? "AWAY"
       : "DRAW";
 
-  const correctResult = input.predictedOutcome === actualOutcome;
-  if (correctResult) points += 3;
+  const predictedOutcome: "HOME" | "DRAW" | "AWAY" =
+    input.predictedOutcome ??
+    (input.predictedHomeScore > input.predictedAwayScore
+      ? "HOME"
+      : input.predictedHomeScore < input.predictedAwayScore
+      ? "AWAY"
+      : "DRAW");
 
-  const exactScore =
-    input.predictedHomeScore === input.actualHomeScore &&
-    input.predictedAwayScore === input.actualAwayScore;
+  // 1. Correct Result: +3 points
+  // Correctly picking the winner or a draw (at the end of 90 or 120 minutes)
+  if (predictedOutcome === actualOutcome) {
+    points += 3;
+  }
 
-  if (exactScore) {
-    points += 5;
-  } else if (correctResult) {
-    // Partial credit: +1 for each side's goal count guessed correctly
-    if (input.predictedHomeScore === input.actualHomeScore) points += 1;
-    if (input.predictedAwayScore === input.actualAwayScore) points += 1;
+  // 2. Goal scoring progression:
+  // +1 point for every goal scored until they reach prediction goal limit
+  points += Math.min(input.actualHomeScore, input.predictedHomeScore);
+  points += Math.min(input.actualAwayScore, input.predictedAwayScore);
+
+  // 3. Correct Home Team Goals: +2 points
+  // Guessing the exact number of goals scored by the home team
+  if (input.predictedHomeScore === input.actualHomeScore) {
+    points += 2;
+  }
+
+  // 4. Correct Away Team Goals: +2 points
+  // Guessing the exact number of goals scored by the away team
+  if (input.predictedAwayScore === input.actualAwayScore) {
+    points += 2;
+  }
+
+  // 5. Correct Goal Difference: +3 points
+  // Getting the exact margin of victory or a tie correct
+  const predDiff = input.predictedHomeScore - input.predictedAwayScore;
+  const actualDiff = input.actualHomeScore - input.actualAwayScore;
+  if (predDiff === actualDiff) {
+    points += 3;
   }
 
   return points;

@@ -3,7 +3,7 @@ import { api } from "../api/client";
 import type {
   Match, Season, Competition, Team, Player, PersonalStats, LeaderboardEntry, Achievement, WatchRecord, Prediction,
   Friend, FriendRequestEntry, FriendActivityEntry, FriendUser, DetailedPlayer, MatchReview, ReviewStats, PotmReport,
-  PotmVoteHistoryItem, UserProfile,
+  PotmVoteHistoryItem, UserProfile, MatchPredictionItem,
 } from "../api/types";
 
 export function useCurrentSeason() {
@@ -197,10 +197,24 @@ export function useFriendActivity() {
     queryFn: () => api.get<{ activity: FriendActivityEntry[] }>("/friends/activity"),
   });
 }
-export function useFriendsLeaderboard() {
+export function useFriendsLeaderboard(type: "minutes" | "predictions" = "minutes", competitionId?: string) {
   return useQuery({
-    queryKey: ["friends", "leaderboard"],
-    queryFn: () => api.get<{ entries: LeaderboardEntry[] }>("/friends/leaderboard"),
+    queryKey: ["friends", "leaderboard", type, competitionId],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (type) params.set("type", type);
+      if (competitionId && competitionId !== "all") params.set("competitionId", competitionId);
+      const qs = params.toString();
+      return api.get<{ entries: LeaderboardEntry[] }>(`/friends/leaderboard${qs ? `?${qs}` : ""}`);
+    },
+  });
+}
+
+export function useMatchPredictions(matchId: string | undefined) {
+  return useQuery({
+    queryKey: ["match-predictions", matchId],
+    queryFn: () => api.get<{ predictions: MatchPredictionItem[] }>(`/matches/${matchId}/predictions`),
+    enabled: !!matchId,
   });
 }
 export function useUserSearch(q: string) {

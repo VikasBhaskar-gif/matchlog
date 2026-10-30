@@ -42,38 +42,51 @@ describe("getLevelForXp", () => {
 });
 
 describe("scorePrediction", () => {
-  const base = { actualHomeScore: 2, actualAwayScore: 1 };
-
-  it("awards 3 points for correct result only", () => {
-    const points = scorePrediction({ predictedOutcome: "HOME", predictedHomeScore: 3, predictedAwayScore: 0, ...base });
-    expect(points).toBe(3);
+  it("scores user example: predicted 3-2, actual 4-2 gives 10 points", () => {
+    // Result (+3) + Home min(4,3)=3 + Away min(2,2)=2 + Away exact (+2) = 10
+    const points = scorePrediction({
+      predictedOutcome: "HOME",
+      predictedHomeScore: 3,
+      predictedAwayScore: 2,
+      actualHomeScore: 4,
+      actualAwayScore: 2,
+    });
+    expect(points).toBe(10);
   });
 
-  it("awards 8 points for exact score (3 result + 5 exact)", () => {
-    const points = scorePrediction({ predictedOutcome: "HOME", predictedHomeScore: 2, predictedAwayScore: 1, ...base });
-    expect(points).toBe(8);
+  it("awards 15 points for exact score 3-2 vs 3-2", () => {
+    // Result (3) + Home min(3,3)=3 + Home exact(2) + Away min(2,2)=2 + Away exact(2) + Diff(3) = 15
+    const points = scorePrediction({
+      predictedOutcome: "HOME",
+      predictedHomeScore: 3,
+      predictedAwayScore: 2,
+      actualHomeScore: 3,
+      actualAwayScore: 2,
+    });
+    expect(points).toBe(15);
   });
 
-  it("awards partial credit for one correct goal count with correct result", () => {
-    const points = scorePrediction({ predictedOutcome: "HOME", predictedHomeScore: 2, predictedAwayScore: 3, ...base });
-    // correct result (3) + home goals correct (1) = 4
-    expect(points).toBe(4);
-  });
-
-  it("awards 0 points for a wrong result", () => {
-    const points = scorePrediction({ predictedOutcome: "AWAY", predictedHomeScore: 0, predictedAwayScore: 2, ...base });
-    expect(points).toBe(0);
-  });
-
-  it("awards 0 points for a draw prediction when actual is a draw but scoreline wrong", () => {
+  it("awards 10 points for 0-0 exact prediction", () => {
+    // Result (3) + Home exact(2) + Away exact(2) + Diff(3) = 10
     const points = scorePrediction({
       predictedOutcome: "DRAW",
       predictedHomeScore: 0,
       predictedAwayScore: 0,
-      actualHomeScore: 2,
-      actualAwayScore: 2,
+      actualHomeScore: 0,
+      actualAwayScore: 0,
     });
-    expect(points).toBe(3);
+    expect(points).toBe(10);
+  });
+
+  it("awards 0 points when nothing matches", () => {
+    const points = scorePrediction({
+      predictedOutcome: "HOME",
+      predictedHomeScore: 3,
+      predictedAwayScore: 0,
+      actualHomeScore: 0,
+      actualAwayScore: 1,
+    });
+    expect(points).toBe(0);
   });
 });
 

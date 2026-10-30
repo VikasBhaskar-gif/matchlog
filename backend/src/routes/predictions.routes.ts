@@ -2,9 +2,10 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { predictions, matches, teams, competitions } from "../db/schema/index.js";
+import { predictions, matches, teams, competitions, users } from "../db/schema/index.js";
 import { parseOrThrow } from "../lib/validate.js";
-import { upsertPrediction, PredictionError } from "../services/prediction.service.js";
+import { upsertPrediction, processMatchPredictions, PredictionError } from "../services/prediction.service.js";
+import { scorePrediction } from "../lib/gamification.js";
 
 const predictionSchema = z.object({
   predictedOutcome: z.enum(["HOME", "DRAW", "AWAY"]).optional(),
@@ -34,6 +35,69 @@ export default async function predictionRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>("/api/matches/:id/prediction", { preHandler: app.requireAuth }, handle);
   // PATCH mirrors POST: both upsert, matching "users can edit until kickoff"
   app.patch<{ Params: { id: string } }>("/api/matches/:id/prediction", { preHandler: app.requireAuth }, handle);
+
+  app.get<{ Params: { id: string } }>("/api/matches/:id/predictions", { preHandler: app.requireAuth }, async (request, reply) => {
+    const match = await db.query.matches.findFirst({ where: eq(matches.id, request.params.id) });
+    if (!match) {
+      reply.code(404).send({ error: "Match not found." });
+      return;
+    }
+
+    if (match.status === "FINISHED" && match.homeScore !== null && match.awayScore !== null) {
+      try {
+        await processMatchPredictions(match.id);
+      } catch {}
+    }
+
+    const rows = await db
+      .select({
+        prediction: predictions,
+        user: {
+          id: users.id,
+          username: users.username,
+          avatar: users.avatar,
+        },
+      })
+      .from(predictions)
+      .innerJoin(users, eq(users.id, predictions.userId))
+      .where(eq(predictions.matchId, match.id))
+      .orderBy(desc(predictions.pointsAwarded), desc(predictions.createdAt));
+
+    const result = rows.map((r) => {
+      let points = r.prediction.pointsAwarded;
+      if (
+        points === null &&
+        (match.status === "FINISHED" || match.status === "LIVE") &&
+        match.homeScore !== null &&
+        match.awayScore !== null
+      ) {
+        points = scorePrediction({
+          predictedOutcome: r.prediction.predictedOutcome,
+          predictedHomeScore: r.prediction.predictedHomeScore,
+          predictedAwayScore: r.prediction.predictedAwayScore,
+          actualHomeScore: match.homeScore,
+          actualAwayScore: match.awayScore,
+        });
+      }
+
+      return {
+        id: r.prediction.id,
+        userId: r.prediction.userId,
+        user: r.user,
+        predictedHomeScore: r.prediction.predictedHomeScore,
+        predictedAwayScore: r.prediction.predictedAwayScore,
+        predictedOutcome: r.prediction.predictedOutcome,
+        pointsAwarded: points,
+        createdAt: r.prediction.createdAt,
+      };
+    });
+
+    if (match.status === "FINISHED" || match.status === "LIVE") {
+      result.sort((a, b) => (b.pointsAwarded ?? -1) - (a.pointsAwarded ?? -1));
+    }
+
+    return { predictions: result };
+  });
 
   async function getPredictionsForUser(userId: string) {
     const rows = await db

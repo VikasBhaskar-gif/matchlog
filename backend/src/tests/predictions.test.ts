@@ -102,7 +102,14 @@ describe("predictions", () => {
     expect(second.processed).toBe(0);
 
     const list = await app.inject({ method: "GET", url: "/api/predictions", headers: { cookie } });
-    expect(list.json().predictions[0].pointsAwarded).toBe(8); // exact score: 3 + 5
+    expect(list.json().predictions[0].pointsAwarded).toBe(13); // exact score under new point system: 3 (result) + 3 (goals) + 2 (home) + 2 (away) + 3 (diff) = 13
+
+    // Also verify GET /api/matches/:id/predictions returns match leaderboard table
+    const matchPreds = await app.inject({ method: "GET", url: `/api/matches/${match.id}/predictions`, headers: { cookie } });
+    expect(matchPreds.statusCode).toBe(200);
+    expect(matchPreds.json().predictions).toHaveLength(1);
+    expect(matchPreds.json().predictions[0].pointsAwarded).toBe(13);
+    expect(matchPreds.json().predictions[0].user.username).toBe("scorepredictor");
   });
 });
 

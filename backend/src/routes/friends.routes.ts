@@ -1,10 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq, sql, inArray } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { users, teams, watchedMatches } from "../db/schema/index.js";
+import { users, teams, watchedMatches, predictions, matches } from "../db/schema/index.js";
 import { parseOrThrow } from "../lib/validate.js";
-import { sql, inArray } from "drizzle-orm";
 import {
   sendFriendRequest,
   acceptFriendRequest,
@@ -243,10 +242,45 @@ export default async function friendsRoutes(app: FastifyInstance) {
     };
   });
 
-  // Friends-only leaderboard — based on minutes watched!
+  // Friends leaderboard — supports "minutes" and "predictions" (with optional competition/league filter)
   app.get("/api/friends/leaderboard", { preHandler: app.requireAuth }, async (request) => {
     const friendRows = await listFriends(request.currentUser!.id);
-    const userIds = [request.currentUser!.id, ...friendRows.map((r) => r.user.id)];
+    const allUsers = [request.currentUser!, ...friendRows.map((r) => r.user)];
+    const userIds = allUsers.map((u) => u.id);
+
+    const q = (request.query as any) ?? {};
+    const type = q.type === "predictions" ? "predictions" : "minutes";
+    const competitionId = q.competitionId as string | undefined;
+
+    if (type === "predictions") {
+      const conditions = [inArray(predictions.userId, userIds)];
+      if (competitionId && competitionId !== "all") {
+        conditions.push(eq(matches.competitionId, competitionId));
+      }
+
+      const predRows = await db
+        .select({
+          userId: predictions.userId,
+          points: sql<number>`coalesce(sum(${predictions.pointsAwarded}), 0)`,
+        })
+        .from(predictions)
+        .innerJoin(matches, eq(matches.id, predictions.matchId))
+        .where(and(...conditions))
+        .groupBy(predictions.userId);
+
+      const pointsMap = new Map(predRows.map((r) => [r.userId, Number(r.points)]));
+
+      const entries = allUsers
+        .map((u) => ({
+          userId: u.id,
+          username: u.username,
+          avatar: u.avatar,
+          value: pointsMap.get(u.id) ?? 0,
+        }))
+        .sort((a, b) => b.value - a.value);
+
+      return { entries };
+    }
 
     const watchRows = await db
       .select({
@@ -259,7 +293,6 @@ export default async function friendsRoutes(app: FastifyInstance) {
 
     const minutesMap = new Map(watchRows.map((r) => [r.userId, Number(r.minutes)]));
 
-    const allUsers = [request.currentUser!, ...friendRows.map((r) => r.user)];
     const entries = allUsers
       .map((u) => ({
         userId: u.id,
@@ -268,6 +301,7 @@ export default async function friendsRoutes(app: FastifyInstance) {
         value: minutesMap.get(u.id) ?? 0,
       }))
       .sort((a, b) => b.value - a.value);
+
     return { entries };
   });
 }

@@ -11,8 +11,15 @@ try {
 
   // Seed database in background so port binds immediately and passes healthcheck
   ensureDatabaseSeeded()
-    .then((res) => {
+    .then(async (res) => {
       app.log.info({ res }, "[DB] Database seeding completed successfully");
+      try {
+        const { rescoreAllPredictions } = await import("./services/prediction.service.js");
+        await rescoreAllPredictions();
+        app.log.info("[DB] Rescored predictions with updated points system");
+      } catch (err) {
+        app.log.error(err, "[DB] Error rescoring predictions");
+      }
     })
     .catch((err) => {
       app.log.error(err, "[DB] Database seeding encountered an error");

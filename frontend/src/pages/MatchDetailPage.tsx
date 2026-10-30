@@ -8,6 +8,7 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
 import { PredictionForm } from "../components/PredictionForm";
 import { PotmPicker } from "../components/PotmPicker";
 import { MatchReviewsSection } from "../components/MatchReviewsSection";
+import { MatchPredictionsLeaderboard } from "../components/MatchPredictionsLeaderboard";
 import { formatKickoff, statusLabel, canRecordWatch, teamInitials, formatRound, formatMatchMinute } from "../lib/format";
 import type { MatchEvent } from "../api/types";
 
@@ -80,6 +81,7 @@ export function MatchDetailPage() {
   const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useMatch(id);
   const [showWatchModal, setShowWatchModal] = useState(false);
+  const [activeSubpart, setActiveSubpart] = useState<"reviews" | "potm" | "predictions">("reviews");
   const qc = useQueryClient();
 
   if (isLoading) return <LoadingState label="Loading match..." />;
@@ -95,6 +97,7 @@ export function MatchDetailPage() {
     qc.invalidateQueries({ queryKey: ["match", id] });
     qc.invalidateQueries({ queryKey: ["match-potm", id] });
     qc.invalidateQueries({ queryKey: ["match-reviews", id] });
+    qc.invalidateQueries({ queryKey: ["match-predictions", id] });
     qc.invalidateQueries({ queryKey: ["matches"] });
   }
 
@@ -272,73 +275,128 @@ export function MatchDetailPage() {
         </div>
       </div>
 
-      {/* Prediction Section */}
-      <ModernSection title="Prediction" subtitle="Predict full-time score and win points">
-        <PredictionForm match={match} locked={!isBefore} onSaved={invalidate} />
-      </ModernSection>
+      {/* Subparts Switcher Bar */}
+      <div className="glass-panel p-1.5 rounded-2xl flex gap-1.5 overflow-x-auto shadow-lg">
+        <button
+          type="button"
+          onClick={() => setActiveSubpart("reviews")}
+          className={`flex-1 min-w-[130px] px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeSubpart === "reviews"
+              ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20 font-black"
+              : "text-slate-400 hover:text-white hover:bg-white/[0.04]"
+          }`}
+        >
+          <span>💬</span>
+          <span>1. Reviews & Ratings</span>
+        </button>
 
-      {/* Lineup & Player of the Match Section */}
-      <ModernSection
-        title={isFinished ? "Lineups & Player of the Match" : isLive ? "Live Match Lineups" : "Match Lineups"}
-        subtitle={
-          isFinished
-            ? "2D tactical pitch, full team lineups, and official MVP voting"
-            : isLive
-            ? "Real-time match tactical lineups and formations"
-            : "Team squads and formations"
-        }
-      >
-        {!isFinished && !isLive ? (
-          <div className="rounded-2xl border border-white/10 bg-[var(--color-surface)]/60 p-6 text-center backdrop-blur-md">
-            <p className="text-xs font-medium text-slate-400">
-              Tactical lineups and Player of the Match voting will unlock on match day once team sheets are confirmed.
-            </p>
-          </div>
-        ) : (
-          <ErrorBoundary
-            fallback={
-              <div className="rounded-2xl border border-white/10 bg-[var(--color-surface)]/60 p-6 text-center">
-                <p className="text-xs text-slate-400">Lineup and voting data is temporarily unavailable for this match.</p>
-              </div>
-            }
-          >
-            <PotmPicker
-              matchId={match.id}
-              homeTeamName={homeName}
-              awayTeamName={awayName}
-              homeTeamLogoUrl={match.homeTeam?.logoUrl}
-              awayTeamLogoUrl={match.awayTeam?.logoUrl}
-              hasWatched={!!match.myWatch}
-              canRecordWatch={canWatch}
-              isFinished={isFinished}
-              isLive={isLive}
-              onRecordWatch={() => setShowWatchModal(true)}
-              onSaved={invalidate}
-            />
-          </ErrorBoundary>
-        )}
-      </ModernSection>
+        <button
+          type="button"
+          onClick={() => setActiveSubpart("potm")}
+          className={`flex-1 min-w-[130px] px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeSubpart === "potm"
+              ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20 font-black"
+              : "text-slate-400 hover:text-white hover:bg-white/[0.04]"
+          }`}
+        >
+          <span>⭐</span>
+          <span>2. Player of the Match</span>
+        </button>
 
-      {/* Reviews Section */}
-      <ModernSection title="Match Reviews & Ratings" subtitle="Share your thoughts on the tactical display">
-        {!isFinished ? (
-          <div className="rounded-2xl border border-white/10 bg-[var(--color-surface)]/60 p-6 text-center backdrop-blur-md">
-            <p className="text-xs text-slate-400">
-              Match reviews and ratings will open once the final whistle sounds.
-            </p>
-          </div>
-        ) : (
-          <ErrorBoundary
-            fallback={
-              <div className="rounded-2xl border border-white/10 bg-[var(--color-surface)]/60 p-6 text-center">
-                <p className="text-xs text-slate-400">Reviews are temporarily unavailable for this match.</p>
-              </div>
-            }
-          >
-            <MatchReviewsSection matchId={match.id} />
-          </ErrorBoundary>
-        )}
-      </ModernSection>
+        <button
+          type="button"
+          onClick={() => setActiveSubpart("predictions")}
+          className={`flex-1 min-w-[130px] px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeSubpart === "predictions"
+              ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20 font-black"
+              : "text-slate-400 hover:text-white hover:bg-white/[0.04]"
+          }`}
+        >
+          <span>🎯</span>
+          <span>3. Predictions</span>
+        </button>
+      </div>
+
+      {/* Subpart 1: Match reviews and ratings */}
+      {activeSubpart === "reviews" && (
+        <ModernSection title="Match Reviews & Ratings" subtitle="Share your thoughts on the tactical display">
+          {!isFinished ? (
+            <div className="rounded-2xl border border-white/10 bg-[var(--color-surface)]/60 p-6 text-center backdrop-blur-md">
+              <p className="text-xs text-slate-400">
+                Match reviews and ratings will open once the final whistle sounds.
+              </p>
+            </div>
+          ) : (
+            <ErrorBoundary
+              fallback={
+                <div className="rounded-2xl border border-white/10 bg-[var(--color-surface)]/60 p-6 text-center">
+                  <p className="text-xs text-slate-400">Reviews are temporarily unavailable for this match.</p>
+                </div>
+              }
+            >
+              <MatchReviewsSection matchId={match.id} />
+            </ErrorBoundary>
+          )}
+        </ModernSection>
+      )}
+
+      {/* Subpart 2: Player of the match */}
+      {activeSubpart === "potm" && (
+        <ModernSection
+          title={isFinished ? "Lineups & Player of the Match" : isLive ? "Live Match Lineups" : "Match Lineups"}
+          subtitle={
+            isFinished
+              ? "2D tactical pitch, full team lineups, and official MVP voting"
+              : isLive
+              ? "Real-time match tactical lineups and formations"
+              : "Team squads and formations"
+          }
+        >
+          {!isFinished && !isLive ? (
+            <div className="rounded-2xl border border-white/10 bg-[var(--color-surface)]/60 p-6 text-center backdrop-blur-md">
+              <p className="text-xs font-medium text-slate-400">
+                Tactical lineups and Player of the Match voting will unlock on match day once team sheets are confirmed.
+              </p>
+            </div>
+          ) : (
+            <ErrorBoundary
+              fallback={
+                <div className="rounded-2xl border border-white/10 bg-[var(--color-surface)]/60 p-6 text-center">
+                  <p className="text-xs text-slate-400">Lineup and voting data is temporarily unavailable for this match.</p>
+                </div>
+              }
+            >
+              <PotmPicker
+                matchId={match.id}
+                homeTeamName={homeName}
+                awayTeamName={awayName}
+                homeTeamLogoUrl={match.homeTeam?.logoUrl}
+                awayTeamLogoUrl={match.awayTeam?.logoUrl}
+                hasWatched={!!match.myWatch}
+                canRecordWatch={canWatch}
+                isFinished={isFinished}
+                isLive={isLive}
+                onRecordWatch={() => setShowWatchModal(true)}
+                onSaved={invalidate}
+              />
+            </ErrorBoundary>
+          )}
+        </ModernSection>
+      )}
+
+      {/* Subpart 3: Predictions */}
+      {activeSubpart === "predictions" && (
+        <ModernSection title="Match Prediction" subtitle="Predict the full-time score and compete on the leaderboard">
+          <PredictionForm match={match} locked={!isBefore} onSaved={invalidate} />
+          <MatchPredictionsLeaderboard
+            matchId={match.id}
+            isFinished={isFinished}
+            isLive={isLive}
+            homeTeamName={homeName}
+            awayTeamName={awayName}
+          />
+        </ModernSection>
+      )}
 
       {showWatchModal && (
         <WatchModal

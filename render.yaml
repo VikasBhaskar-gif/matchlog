@@ -3,6 +3,7 @@ services:
     name: matchlog
     runtime: node
     plan: free
+    autoDeploy: true
     buildCommand: npm run build
     startCommand: npm start
     envVars:

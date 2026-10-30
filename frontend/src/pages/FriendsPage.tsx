@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
@@ -9,6 +9,7 @@ import {
   useFriendActivity,
   useFriendsLeaderboard,
   useUserSearch,
+  useCompetitions,
 } from "../hooks/queries";
 import { useAuth } from "../context/AuthContext";
 import { LoadingState, EmptyState } from "../components/States";
@@ -246,27 +247,137 @@ function activityIcon(type: string) {
 }
 
 function LeaderboardTab() {
-  const board = useFriendsLeaderboard();
+  const [metric, setMetric] = useState<"minutes" | "predictions">("minutes");
+  const [selectedLeagueId, setSelectedLeagueId] = useState<string>("all");
+  const competitions = useCompetitions();
+
+  const board = useFriendsLeaderboard(
+    metric,
+    metric === "predictions" ? selectedLeagueId : undefined
+  );
   const { user } = useAuth();
-  if (board.isLoading) return <LoadingState label="Loading leaderboard..." />;
-  if (!board.data || board.data.entries.length === 0) return <EmptyState title="Add friends to see a leaderboard" />;
+
+  const leagues = useMemo(() => {
+    return (competitions.data?.competitions ?? []).filter((c) => c.type === "league" || c.name.includes("League"));
+  }, [competitions.data?.competitions]);
 
   return (
-    <div className="space-y-1.5">
-      {board.data.entries.map((entry, i) => (
-        <div
-          key={entry.userId}
-          className={`flex items-center justify-between rounded-xl p-3 ${
-            entry.userId === user?.id ? "bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/40" : "bg-[var(--color-surface)] border border-[var(--color-border)]"
+    <div className="space-y-4">
+      {/* Metric Selector: Watched Minutes vs Prediction Points */}
+      <div className="glass-panel p-1 rounded-2xl flex gap-1 shadow-md">
+        <button
+          type="button"
+          onClick={() => setMetric("minutes")}
+          className={`flex-1 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            metric === "minutes"
+              ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20 font-black"
+              : "text-slate-400 hover:text-white"
           }`}
         >
-          <div className="flex items-center gap-3">
-            <span className="w-6 text-center text-sm font-bold text-[var(--color-text-dim)]">{i + 1}</span>
-            <span className="text-sm font-semibold">{entry.userId === user?.id ? "You" : entry.username}</span>
-          </div>
-          <span className="text-sm font-bold text-[var(--color-primary)]">{entry.value} min</span>
+          <span>⏱️</span>
+          <span>Watched Minutes</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMetric("predictions")}
+          className={`flex-1 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            metric === "predictions"
+              ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20 font-black"
+              : "text-slate-400 hover:text-white"
+          }`}
+        >
+          <span>🎯</span>
+          <span>Prediction Points</span>
+        </button>
+      </div>
+
+      {/* When Prediction Points is active: League Pills (Overall + Leagues) */}
+      {metric === "predictions" && (
+        <div className="flex gap-1.5 overflow-x-auto pb-1.5 pt-0.5 scrollbar-thin">
+          <button
+            type="button"
+            onClick={() => setSelectedLeagueId("all")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+              selectedLeagueId === "all"
+                ? "bg-white/15 text-emerald-400 border border-emerald-500/50 shadow-sm"
+                : "bg-white/[0.04] text-slate-400 hover:text-white border border-white/10"
+            }`}
+          >
+            Overall (All Leagues)
+          </button>
+          {leagues.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setSelectedLeagueId(c.id)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                selectedLeagueId === c.id
+                  ? "bg-white/15 text-emerald-400 border border-emerald-500/50 shadow-sm"
+                  : "bg-white/[0.04] text-slate-400 hover:text-white border border-white/10"
+              }`}
+            >
+              <span>{c.name}</span>
+            </button>
+          ))}
         </div>
-      ))}
+      )}
+
+      {/* Leaderboard Table */}
+      {board.isLoading && <LoadingState label="Loading leaderboard..." />}
+      {!board.isLoading && (!board.data || board.data.entries.length === 0) && (
+        <EmptyState title="Add friends to see a leaderboard" />
+      )}
+
+      {!board.isLoading && board.data && board.data.entries.length > 0 && (
+        <div className="space-y-1.5">
+          {board.data.entries.map((entry, i) => {
+            const isMe = entry.userId === user?.id;
+            const rank = i + 1;
+            const rankBadge = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : rank;
+
+            return (
+              <Link
+                key={entry.userId}
+                to={isMe ? "/profile" : `/users/${entry.userId}`}
+                viewTransition
+                className={`flex items-center justify-between rounded-2xl p-3.5 border transition-all ${
+                  isMe
+                    ? "bg-emerald-500/10 border-emerald-500/40 shadow-sm shadow-emerald-500/5"
+                    : "bg-[var(--color-surface)] border-[var(--color-border)] hover:border-emerald-500/30"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-6 text-center text-sm font-black text-[var(--color-text-dim)]">
+                    {rankBadge}
+                  </span>
+                  <div className="h-8 w-8 rounded-full bg-[var(--color-surface-2)] overflow-hidden flex items-center justify-center text-xs font-bold border border-white/10">
+                    {entry.avatar ? (
+                      <img src={entry.avatar} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      entry.username[0]?.toUpperCase()
+                    )}
+                  </div>
+                  <span className="text-sm font-bold text-white flex items-center gap-1.5">
+                    <span>{isMe ? "You" : entry.username}</span>
+                    {isMe && (
+                      <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-emerald-500 text-black uppercase">
+                        You
+                      </span>
+                    )}
+                  </span>
+                </div>
+
+                <span className="text-sm font-black text-emerald-400 tabular-nums">
+                  {metric === "minutes"
+                    ? `${entry.value.toLocaleString()} min`
+                    : `${entry.value} pts`}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

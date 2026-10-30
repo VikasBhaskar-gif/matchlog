@@ -204,3 +204,36 @@ export async function processMatchPredictions(matchId: string) {
     return { processed: unscored.length };
   });
 }
+
+/**
+ * Re-score all finished match predictions with the updated points system.
+ */
+export async function rescoreAllPredictions() {
+  const finished = await db
+    .select({
+      id: predictions.id,
+      predictedOutcome: predictions.predictedOutcome,
+      predictedHomeScore: predictions.predictedHomeScore,
+      predictedAwayScore: predictions.predictedAwayScore,
+      actualHomeScore: matches.homeScore,
+      actualAwayScore: matches.awayScore,
+    })
+    .from(predictions)
+    .innerJoin(matches, eq(matches.id, predictions.matchId))
+    .where(eq(matches.status, "FINISHED"));
+
+  for (const p of finished) {
+    if (p.actualHomeScore === null || p.actualAwayScore === null) continue;
+    const points = scorePrediction({
+      predictedOutcome: p.predictedOutcome,
+      predictedHomeScore: p.predictedHomeScore,
+      predictedAwayScore: p.predictedAwayScore,
+      actualHomeScore: p.actualHomeScore,
+      actualAwayScore: p.actualAwayScore,
+    });
+    await db
+      .update(predictions)
+      .set({ pointsAwarded: points, scoredAt: new Date() })
+      .where(eq(predictions.id, p.id));
+  }
+}

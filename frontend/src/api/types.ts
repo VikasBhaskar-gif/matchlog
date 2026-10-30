@@ -95,6 +95,21 @@ export type Prediction = {
   pointsAwarded: number | null;
 };
 
+export type MatchPredictionItem = {
+  id: string;
+  userId: string;
+  user: {
+    id: string;
+    username: string;
+    avatar: string | null;
+  };
+  predictedHomeScore: number;
+  predictedAwayScore: number;
+  predictedOutcome: "HOME" | "DRAW" | "AWAY";
+  pointsAwarded: number | null;
+  createdAt: string;
+};
+
 export type MatchEvent = {
   id: string;
   matchId: string;

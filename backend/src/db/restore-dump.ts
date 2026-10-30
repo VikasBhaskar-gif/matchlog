@@ -30,12 +30,16 @@ export async function ensureDatabaseSeeded() {
       path.resolve(process.cwd(), "backend/dist/db/migrations"),
     ];
     const migrationsFolder = migrationCandidates.find((p) => fs.existsSync(p));
-    if (migrationsFolder) {
-      console.log(`[DB] Running migrations from ${migrationsFolder}...`);
-      await migrate(db, { migrationsFolder });
-      console.log("[DB] Migrations finished successfully.");
-    } else {
-      console.warn("[DB] Migrations folder not found in candidates:", migrationCandidates);
+    try {
+      if (migrationsFolder) {
+        console.log(`[DB] Running migrations from ${migrationsFolder}...`);
+        await migrate(db, { migrationsFolder });
+        console.log("[DB] Migrations finished successfully.");
+      } else {
+        console.warn("[DB] Migrations folder not found in candidates:", migrationCandidates);
+      }
+    } catch (migErr) {
+      console.warn("[DB] Migrations notice (tables may already exist):", migErr);
     }
 
     // Ensure display_name column exists if dump references it

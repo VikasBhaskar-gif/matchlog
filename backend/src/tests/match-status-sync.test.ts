@@ -129,7 +129,7 @@ describe("runMatchStatusSync", () => {
     await runMatchStatusSync([provider]);
 
     const prediction = await db.query.predictions.findFirst({ where: eq(predictions.userId, user.id) });
-    expect(prediction?.pointsAwarded).toBe(8); // exact score: 3 (result) + 5 (exact)
+    expect(prediction?.pointsAwarded).toBe(13); // exact score under new point system: 3 (result) + 3 (goals) + 2 (home) + 2 (away) + 3 (diff) = 13
   });
 
   it("does not re-poll an old finished match (outside the recently-finished window)", async () => {
