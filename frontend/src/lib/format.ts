@@ -73,8 +73,9 @@ export function isMatchCalendarDay(kickoffAt: string | Date, referenceDate: Date
 }
 
 export function canRecordWatch(match: { status: string; kickoffAt: string | Date }, referenceDate: Date = new Date()): boolean {
-  if (match.status === "FINISHED") return true;
-  return isMatchCalendarDay(match.kickoffAt, referenceDate);
+  if (match.status === "FINISHED" || match.status === "LIVE" || match.status === "PAUSED") return true;
+  const kickoffMs = new Date(match.kickoffAt).getTime();
+  return !isNaN(kickoffMs) && kickoffMs <= referenceDate.getTime();
 }
 
 export function formatPosition(position?: string | null): string {

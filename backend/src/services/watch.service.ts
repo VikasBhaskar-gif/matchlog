@@ -30,12 +30,13 @@ export function isMatchCalendarDay(kickoffAt: Date | string, referenceDate: Date
 }
 
 /**
- * Completed historical matches can be recorded anytime.
- * Future matches can only be recorded on the match's calendar day.
+ * Completed historical and live matches can be recorded.
+ * Scheduled matches can only be recorded after kickoff has started.
  */
 export function canRecordWatch(match: { status: string; kickoffAt: Date | string }, referenceDate: Date = new Date()): boolean {
-  if (match.status === "FINISHED") return true;
-  return isMatchCalendarDay(match.kickoffAt, referenceDate);
+  if (match.status === "FINISHED" || match.status === "LIVE" || match.status === "PAUSED") return true;
+  const kickoffMs = new Date(match.kickoffAt).getTime();
+  return !isNaN(kickoffMs) && kickoffMs <= referenceDate.getTime();
 }
 
 // A watch record older than this many days before the new match's kickoff
@@ -97,9 +98,9 @@ export async function recordWatch(
     const match = await tx.query.matches.findFirst({ where: eq(matches.id, matchId) });
     if (!match) throw new WatchError("Match not found.", 404);
 
-    // Enforce watch recording rules: completed matches anytime, future matches only on match day
+    // Enforce watch recording rules: match must have started
     if (!canRecordWatch(match)) {
-      throw new WatchError("Watching a future match can only be recorded on the match's calendar day.", 400);
+      throw new WatchError("Watching can only be recorded after the match has started.", 400);
     }
 
     validateRange(input.startMinute, input.endMinute, match.maxWatchMinutes);

@@ -1,11 +1,15 @@
 import { useState, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCompetitions, useCompetitionStandings, useMyFollows } from "../hooks/queries";
+import { useCompetitions, useCompetitionStandings, useMyFollows, useMatches } from "../hooks/queries";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { LoadingState, EmptyState, ErrorState } from "../components/States";
 import { LEAGUE_LOGOS, sortCompetitions } from "../lib/competitions";
+import { MatchCard } from "../components/MatchCard";
+import { WatchModal } from "../components/WatchModal";
+import { PredictModal } from "../components/PredictModal";
+import type { Match } from "../api/types";
 
 export function LeaguesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -33,6 +37,44 @@ export function LeaguesPage() {
   }, [competitions, selectedId]);
 
   const standingsQuery = useCompetitionStandings(selectedComp?.id);
+
+  const [watchTarget, setWatchTarget] = useState<Match | null>(null);
+  const [predictTarget, setPredictTarget] = useState<Match | null>(null);
+  const [selectedMatchday, setSelectedMatchday] = useState<string | "ALL">("ALL");
+
+  const upcomingMatchesQuery = useMatches(
+    selectedComp?.id
+      ? {
+          competition: selectedComp.id,
+          status: "SCHEDULED",
+          sort: "asc",
+          limit: "380",
+        }
+      : undefined
+  );
+
+  const matchdays = useMemo(() => {
+    const matchesList = upcomingMatchesQuery.data?.matches ?? [];
+    const map = new Map<string, { round: string; minKickoff: number; matches: Match[] }>();
+
+    for (const m of matchesList) {
+      const roundName = m.round || "Upcoming Matches";
+      let entry = map.get(roundName);
+      if (!entry) {
+        entry = {
+          round: roundName,
+          minKickoff: new Date(m.kickoffAt).getTime(),
+          matches: [],
+        };
+        map.set(roundName, entry);
+      }
+      entry.matches.push(m);
+      const kTime = new Date(m.kickoffAt).getTime();
+      if (kTime < entry.minKickoff) entry.minKickoff = kTime;
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.minKickoff - b.minKickoff);
+  }, [upcomingMatchesQuery.data?.matches]);
 
   const isFollowing = selectedComp ? followedCompIds.has(selectedComp.id) : false;
 
@@ -264,6 +306,122 @@ export function LeaguesPage() {
           </div>
         )}
       </div>
+
+      {/* Upcoming League Fixtures by Matchday Section */}
+      <div className="space-y-4 pt-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-emerald-400 text-lg">📅</span>
+              <h2 className="text-lg font-black text-white tracking-tight">
+                Upcoming Fixtures by Matchday
+              </h2>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Full schedule for {selectedComp?.name ?? "this tournament"} arranged chronologically by round
+            </p>
+          </div>
+          <span className="text-xs font-bold px-3 py-1 rounded-full bg-white/[0.04] border border-white/10 text-slate-300 self-start sm:self-auto">
+            {upcomingMatchesQuery.data?.matches?.length ?? 0} upcoming fixtures
+          </span>
+        </div>
+
+        {upcomingMatchesQuery.isLoading && <LoadingState label="Loading upcoming matchdays..." />}
+
+        {matchdays.length === 0 && !upcomingMatchesQuery.isLoading && (
+          <EmptyState
+            title="No upcoming fixtures"
+            subtitle="All matches in this competition schedule may have already concluded or not yet released."
+          />
+        )}
+
+        {/* Matchday Quick Filter Pills */}
+        {matchdays.length > 1 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-2 green-scrollbar">
+            <button
+              onClick={() => setSelectedMatchday("ALL")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                selectedMatchday === "ALL"
+                  ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
+                  : "bg-white/[0.04] text-slate-400 hover:text-white border border-white/10"
+              }`}
+            >
+              All Matchdays ({matchdays.length})
+            </button>
+            {matchdays.map((md) => (
+              <button
+                key={md.round}
+                onClick={() => setSelectedMatchday(md.round)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                  selectedMatchday === md.round
+                    ? "bg-emerald-500 text-black shadow-md shadow-emerald-500/20"
+                    : "bg-white/[0.04] text-slate-400 hover:text-white border border-white/10"
+                }`}
+              >
+                {md.round}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Matchdays List */}
+        <div className="space-y-6">
+          {matchdays
+            .filter((md) => selectedMatchday === "ALL" || selectedMatchday === md.round)
+            .map((md) => (
+              <div key={md.round} className="space-y-3">
+                <div className="flex items-center justify-between px-1 border-b border-white/5 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    <h3 className="text-sm font-black text-white tracking-wide uppercase">
+                      {md.round}
+                    </h3>
+                  </div>
+                  <span className="text-[11px] font-semibold text-slate-400">
+                    {md.matches.length} {md.matches.length === 1 ? "fixture" : "fixtures"}
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {md.matches.map((m) => (
+                    <MatchCard
+                      key={m.id}
+                      match={m}
+                      onRecordWatch={setWatchTarget}
+                      onPredict={setPredictTarget}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+        </div>
+      </div>
+
+      {watchTarget && (
+        <WatchModal
+          match={watchTarget}
+          existingWatch={watchTarget.myWatch}
+          onClose={() => setWatchTarget(null)}
+          onSaved={() => {
+            setWatchTarget(null);
+            qc.invalidateQueries();
+          }}
+        />
+      )}
+
+      {predictTarget && (
+        <PredictModal
+          match={predictTarget}
+          existingPrediction={predictTarget.myPrediction}
+          onClose={() => setPredictTarget(null)}
+          onSaved={() => {
+            setPredictTarget(null);
+            qc.invalidateQueries({ queryKey: ["matches"] });
+            qc.invalidateQueries({ queryKey: ["match", predictTarget.id] });
+            qc.invalidateQueries({ queryKey: ["predictions"] });
+            qc.invalidateQueries({ queryKey: ["stats"] });
+          }}
+        />
+      )}
     </div>
   );
 }

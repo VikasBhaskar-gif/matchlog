@@ -178,7 +178,7 @@ export function MatchCard({
                   ? "bg-gradient-to-r from-emerald-500 to-teal-400 text-black hover:brightness-110 active:scale-95 shadow-[0_0_15px_rgba(16,185,129,0.25)] cursor-pointer"
                   : "bg-white/[0.03] text-slate-500 border border-white/[0.06] cursor-not-allowed opacity-60"
               }`}
-              title={allowedToWatch ? "Record Watch" : "Watch recording is only available on match day"}
+              title={allowedToWatch ? "Record Watch" : "Watch recording is only available once the match has started"}
             >
               <span>⏱️</span> Record Watch
             </button>

@@ -25,7 +25,11 @@ type Group = {
   matches: Match[];
 };
 
-function groupMatches(matchesList: Match[], sortDirection: "asc" | "desc"): Group[] {
+function groupMatches(
+  matchesList: Match[],
+  sortDirection: "asc" | "desc",
+  onlyNextMatchday: boolean = false
+): Group[] {
   const groups: Group[] = [];
   const map = new Map<string, Group>();
 
@@ -51,6 +55,14 @@ function groupMatches(matchesList: Match[], sortDirection: "asc" | "desc"): Grou
       g.matches.sort((a, b) => new Date(b.kickoffAt).getTime() - new Date(a.kickoffAt).getTime());
     } else {
       g.matches.sort((a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime());
+    }
+
+    // When requested, filter upcoming matches to only the single next upcoming matchday
+    if (onlyNextMatchday && g.matches.length > 0) {
+      const nextRound = g.matches[0].round;
+      if (nextRound) {
+        g.matches = g.matches.filter((m) => m.round === nextRound);
+      }
     }
   }
 
@@ -216,49 +228,62 @@ export function MatchesPage() {
   const singleTotal = singleQuery.data?.total ?? singleMatches.length;
 
   // Split single matches according to user's specified hierarchy:
-  // 1. Matches of followed teams
-  // 2. Matches of followed leagues
-  // 3. Other leagues
+  // 1. Matches of followed teams (only their single next upcoming match when upcoming)
+  // 2. Matches of followed leagues (only next matchday when upcoming)
+  // 3. Other leagues (only next matchday when upcoming)
   const { singleFollowedTeamsMatches, singleFollowedLeaguesGroups, singleOtherLeaguesGroups } = useMemo(() => {
     if (isAllMode) return { singleFollowedTeamsMatches: [], singleFollowedLeaguesGroups: [], singleOtherLeaguesGroups: [] };
 
     const teamMatches: Match[] = [];
-    const teamMatchIds = new Set<string>();
 
     // 1. Matches of followed teams
-    for (const m of singleMatches) {
-      const isFollowedTeam =
-        (m.homeTeamId && followedTeamIds.has(m.homeTeamId)) ||
-        (m.awayTeamId && followedTeamIds.has(m.awayTeamId)) ||
-        (m.homeTeam?.id && followedTeamIds.has(m.homeTeam.id)) ||
-        (m.awayTeam?.id && followedTeamIds.has(m.awayTeam.id));
-
-      if (isFollowedTeam) {
-        teamMatches.push(m);
-        teamMatchIds.add(m.id);
+    if (status === "SCHEDULED") {
+      // Pick only the single next upcoming match for each followed team
+      const nextMatchPerTeam = new Map<string, Match>();
+      const sorted = [...singleMatches].sort(
+        (a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime()
+      );
+      for (const m of sorted) {
+        for (const tid of [m.homeTeamId, m.awayTeamId, m.homeTeam?.id, m.awayTeam?.id]) {
+          if (tid && followedTeamIds.has(tid) && !nextMatchPerTeam.has(tid)) {
+            nextMatchPerTeam.set(tid, m);
+          }
+        }
+      }
+      const unique = Array.from(new Set(nextMatchPerTeam.values())).sort(
+        (a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime()
+      );
+      teamMatches.push(...unique);
+    } else {
+      for (const m of singleMatches) {
+        const isFollowedTeam =
+          (m.homeTeamId && followedTeamIds.has(m.homeTeamId)) ||
+          (m.awayTeamId && followedTeamIds.has(m.awayTeamId)) ||
+          (m.homeTeam?.id && followedTeamIds.has(m.homeTeam.id)) ||
+          (m.awayTeam?.id && followedTeamIds.has(m.awayTeam.id));
+        if (isFollowedTeam) teamMatches.push(m);
+      }
+      if (status === "FINISHED") {
+        teamMatches.sort((a, b) => new Date(b.kickoffAt).getTime() - new Date(a.kickoffAt).getTime());
+      } else {
+        teamMatches.sort((a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime());
       }
     }
 
-    if (status === "FINISHED") {
-      teamMatches.sort((a, b) => new Date(b.kickoffAt).getTime() - new Date(a.kickoffAt).getTime());
-    } else {
-      teamMatches.sort((a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime());
-    }
+    const isUpcoming = status === "SCHEDULED";
+    const sortDir = status === "FINISHED" ? "desc" : "asc";
 
-    // Remaining matches for leagues
-    const remainingMatches = singleMatches.filter((m) => !teamMatchIds.has(m.id));
-
-    // 2. Matches of followed leagues
-    const followedLeagueMatches = remainingMatches.filter(
+    // 2. Matches of followed leagues (include all league matches, even if team is followed)
+    const followedLeagueMatches = singleMatches.filter(
       (m) => m.competitionId && followedCompIds.has(m.competitionId)
     );
-    const followedLeaguesGroups = groupMatches(followedLeagueMatches, status === "FINISHED" ? "desc" : "asc");
+    const followedLeaguesGroups = groupMatches(followedLeagueMatches, sortDir, isUpcoming);
 
-    // 3. Other leagues
-    const otherMatches = remainingMatches.filter(
+    // 3. Other leagues (include all matches of those leagues)
+    const otherMatches = singleMatches.filter(
       (m) => !m.competitionId || !followedCompIds.has(m.competitionId)
     );
-    const otherLeaguesGroups = groupMatches(otherMatches, status === "FINISHED" ? "desc" : "asc");
+    const otherLeaguesGroups = groupMatches(otherMatches, sortDir, isUpcoming);
 
     return {
       singleFollowedTeamsMatches: teamMatches,
@@ -271,7 +296,7 @@ export function MatchesPage() {
   const finishedMatches = allFinishedQuery.data?.matches ?? [];
   const liveMatches = allLiveQuery.data?.matches ?? [];
 
-  const allUpcomingGroups = useMemo(() => groupMatches(upcomingMatches, "asc"), [upcomingMatches]);
+  const allUpcomingGroups = useMemo(() => groupMatches(upcomingMatches, "asc", true), [upcomingMatches]);
   const allFinishedGroups = useMemo(() => groupMatches(finishedMatches, "desc"), [finishedMatches]);
   const allLiveGroups = useMemo(() => groupMatches(liveMatches, "asc"), [liveMatches]);
 
@@ -432,51 +457,67 @@ export function MatchesPage() {
             </div>
           )}
 
-          {/* Priority Group 2: Matches of Followed Leagues */}
-          {singleFollowedLeaguesGroups.length > 0 && (
-            <div className="space-y-5">
-              <div className="flex items-center justify-between border-b border-cyan-500/30 pb-2 px-1">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400" />
-                  <h2 className="text-sm font-black uppercase tracking-wider text-cyan-400">
-                    Your Followed Leagues
-                  </h2>
-                </div>
-              </div>
-              <div className="space-y-6">
-                {singleFollowedLeaguesGroups.map((group) => (
-                  <CompetitionMatchGroup
-                    key={group.competitionId}
-                    group={group}
-                    onRecordWatch={setWatchTarget}
-                    onPredict={setPredictTarget}
-                  />
-                ))}
-              </div>
+          {/* When a specific competition is selected, render it directly without redundant "Followed/Other" category headers */}
+          {competitionId ? (
+            <div className="space-y-6">
+              {[...singleFollowedLeaguesGroups, ...singleOtherLeaguesGroups].map((group) => (
+                <CompetitionMatchGroup
+                  key={group.competitionId}
+                  group={group}
+                  onRecordWatch={setWatchTarget}
+                  onPredict={setPredictTarget}
+                />
+              ))}
             </div>
-          )}
-
-          {/* Priority Group 3: Other Leagues */}
-          {singleOtherLeaguesGroups.length > 0 && (
-            <div className="space-y-5">
-              {(singleFollowedTeamsMatches.length > 0 || singleFollowedLeaguesGroups.length > 0) && (
-                <div className="flex items-center justify-between border-b border-white/10 pb-2 px-1">
-                  <h2 className="text-sm font-black uppercase tracking-wider text-slate-400">
-                    Other Competitions
-                  </h2>
+          ) : (
+            <>
+              {/* Priority Group 2: Matches of Followed Leagues */}
+              {singleFollowedLeaguesGroups.length > 0 && (
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between border-b border-cyan-500/30 pb-2 px-1">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-cyan-400" />
+                      <h2 className="text-sm font-black uppercase tracking-wider text-cyan-400">
+                        Your Followed Leagues
+                      </h2>
+                    </div>
+                  </div>
+                  <div className="space-y-6">
+                    {singleFollowedLeaguesGroups.map((group) => (
+                      <CompetitionMatchGroup
+                        key={group.competitionId}
+                        group={group}
+                        onRecordWatch={setWatchTarget}
+                        onPredict={setPredictTarget}
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
-              <div className="space-y-6">
-                {singleOtherLeaguesGroups.map((group) => (
-                  <CompetitionMatchGroup
-                    key={group.competitionId}
-                    group={group}
-                    onRecordWatch={setWatchTarget}
-                    onPredict={setPredictTarget}
-                  />
-                ))}
-              </div>
-            </div>
+
+              {/* Priority Group 3: Other Leagues */}
+              {singleOtherLeaguesGroups.length > 0 && (
+                <div className="space-y-5">
+                  {(singleFollowedTeamsMatches.length > 0 || singleFollowedLeaguesGroups.length > 0) && (
+                    <div className="flex items-center justify-between border-b border-white/10 pb-2 px-1">
+                      <h2 className="text-sm font-black uppercase tracking-wider text-slate-400">
+                        Other Competitions
+                      </h2>
+                    </div>
+                  )}
+                  <div className="space-y-6">
+                    {singleOtherLeaguesGroups.map((group) => (
+                      <CompetitionMatchGroup
+                        key={group.competitionId}
+                        group={group}
+                        onRecordWatch={setWatchTarget}
+                        onPredict={setPredictTarget}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

@@ -47,7 +47,7 @@ export function WatchModal({ match, existingWatch, onClose, onSaved }: Props) {
 
   async function handleSave() {
     if (!existingWatch && !canRecord) {
-      setError("Watching can only be recorded on the match's calendar day or once completed.");
+      setError("Watching can only be recorded after the match has started.");
       return;
     }
     setSaving(true);
@@ -117,7 +117,7 @@ export function WatchModal({ match, existingWatch, onClose, onSaved }: Props) {
         {!existingWatch && !canRecord && (
           <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-300 flex items-start gap-2.5">
             <span className="text-base select-none">ℹ️</span>
-            <span>Record Watch is enabled on match day or after kickoff has concluded.</span>
+            <span>Record Watch is enabled once the match has kicked off.</span>
           </div>
         )}
 
@@ -170,7 +170,7 @@ export function WatchModal({ match, existingWatch, onClose, onSaved }: Props) {
             disabled={saving || duration <= 0 || (!existingWatch && !canRecord)}
             className="flex-1 px-4 py-3 rounded-xl bg-emerald-500 text-black font-black text-xs sm:text-sm hover:bg-emerald-400 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-40 transition-all shadow-lg shadow-emerald-500/20"
           >
-            {saving ? "Saving..." : existingWatch ? "Save Changes" : !canRecord ? "Only On Match Day" : "Confirm Watch"}
+            {saving ? "Saving..." : existingWatch ? "Save Changes" : !canRecord ? "Only After Kickoff" : "Confirm Watch"}
           </button>
         </div>
       </div>
