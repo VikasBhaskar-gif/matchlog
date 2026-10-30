@@ -294,17 +294,17 @@ function LeaderboardTab() {
 
       {/* When Prediction Points is active: League Pills (Overall + Leagues) */}
       {metric === "predictions" && (
-        <div className="flex gap-1.5 overflow-x-auto pb-1.5 pt-0.5 scrollbar-thin">
+        <div className="flex gap-1.5 overflow-x-auto pb-1.5 pt-0.5 no-scrollbar scroll-smooth">
           <button
             type="button"
             onClick={() => setSelectedLeagueId("all")}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
               selectedLeagueId === "all"
-                ? "bg-white/15 text-emerald-400 border border-emerald-500/50 shadow-sm"
-                : "bg-white/[0.04] text-slate-400 hover:text-white border border-white/10"
+                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.2)] font-black"
+                : "bg-white/[0.04] text-slate-400 hover:text-white border border-white/10 hover:border-emerald-500/30"
             }`}
           >
-            Overall (All Leagues)
+            All (All Leagues)
           </button>
           {leagues.map((c) => (
             <button
@@ -313,8 +313,8 @@ function LeaderboardTab() {
               onClick={() => setSelectedLeagueId(c.id)}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
                 selectedLeagueId === c.id
-                  ? "bg-white/15 text-emerald-400 border border-emerald-500/50 shadow-sm"
-                  : "bg-white/[0.04] text-slate-400 hover:text-white border border-white/10"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.2)] font-black"
+                  : "bg-white/[0.04] text-slate-400 hover:text-white border border-white/10 hover:border-emerald-500/30"
               }`}
             >
               <span>{c.name}</span>
