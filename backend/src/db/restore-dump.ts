@@ -38,11 +38,11 @@ export async function ensureDatabaseSeeded() {
       console.warn("[DB] Migrations folder not found in candidates:", migrationCandidates);
     }
 
-    // 2. Check if users table already has data
-    const userCount = await sql`SELECT count(*) FROM users`;
-    if (parseInt(userCount[0].count, 10) > 0) {
-      console.log("[DB] Database already contains users. Skipping data import.");
-      return;
+    // 2. Check if VikasBhaskar already exists
+    const vikasExists = await sql`SELECT id FROM users WHERE username = 'VikasBhaskar'`;
+    if (vikasExists.length > 0) {
+      console.log("[DB] Database already contains VikasBhaskar. Skipping data import.");
+      return { ok: true, skipped: true, reason: "VikasBhaskar exists" };
     }
 
     // 3. Database is empty, import data_dump.sql
