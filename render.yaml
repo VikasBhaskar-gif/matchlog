@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: matchlog
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: matchlog-db
+          property: connectionString
+
+databases:
+  - name: matchlog-db
+    plan: free
+    databaseName: matchlog
+    user: matchlog

@@ -1,0 +1,168 @@
+@import "tailwindcss";
+
+:root {
+  --color-bg: #080b10;
+  --color-surface: #0f1520;
+  --color-surface-2: #161e2c;
+  --color-surface-3: #1e2838;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-hover: rgba(255, 255, 255, 0.16);
+  --color-border-active: rgba(16, 185, 129, 0.4);
+  --color-text: #f1f5f9;
+  --color-text-dim: #94a3b8;
+  --color-primary: #10b981;
+  --color-primary-light: #34d399;
+  --color-primary-dark: #059669;
+  --color-accent: #f59e0b;
+  --color-danger: #f43f5e;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  background-image:
+    radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.08) 0%, transparent 40%),
+    radial-gradient(circle at 100% 50%, rgba(56, 189, 248, 0.04) 0%, transparent 30%);
+  background-attachment: fixed;
+  color: var(--color-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Tabular numbers for scores, clocks, and stats */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sleek scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* Modern Glass & Glow Utility Classes */
+.glass-panel {
+  background: rgba(15, 21, 32, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-border);
+}
+
+.glass-card {
+  background: rgba(15, 21, 32, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--color-border);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 0 20px -2px rgba(16, 185, 129, 0.1);
+}
+
+.glass-card:active {
+  transform: translateY(0) scale(0.995);
+}
+
+/* Page entrance motion */
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-page-in {
+  animation: pageFadeIn 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Pulse animation for live indicators */
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 12px rgba(244, 63, 94, 0.6);
+  }
+  50% {
+    opacity: 0.6;
+    box-shadow: 0 0 4px rgba(244, 63, 94, 0.2);
+  }
+}
+
+.animate-live-glow {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+/* Modal entrance */
+@keyframes modalScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-scale-in {
+  animation: modalScaleIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Native View Transitions API support with progressive fallback */
+::view-transition-old(root) {
+  animation: 0.2s cubic-bezier(0.16, 1, 0.3, 1) both fadeOut;
+}
+
+::view-transition-new(root) {
+  animation: 0.24s cubic-bezier(0.16, 1, 0.3, 1) both fadeIn;
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.99); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(1.01); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+  .animate-page-in,
+  .animate-live-glow,
+  .glass-card {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -1,0 +1,192 @@
+import { useRef } from "react";
+import { NavLink, Outlet, Navigate, useLocation } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { LoadingState } from "./States";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { SupportedTeamModal } from "./SupportedTeamModal";
+import { useScrollRestoration } from "../lib/useScrollRestoration";
+
+const NAV_ITEMS = [
+  { to: "/matches", label: "Matches", icon: "⚽" },
+  { to: "/leagues", label: "Leagues", icon: "🏆" },
+  { to: "/teams", label: "Teams", icon: "👕" },
+  { to: "/players", label: "Players", icon: "👤" },
+  { to: "/leaderboard", label: "Leaderboard", icon: "🏅" },
+  { to: "/friends", label: "Friends", icon: "🧑‍🤝‍🧑" },
+  { to: "/stats", label: "My Stats", icon: "📊" },
+];
+
+const MOBILE_NAV_ITEMS = ["/matches", "/leagues", "/teams", "/players", "/stats"];
+
+export function AppLayout() {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  const mainRef = useRef<HTMLElement>(null);
+  useScrollRestoration(mainRef);
+
+  if (loading) return <LoadingState label="Loading Matchlog..." />;
+  if (!user) return <Navigate to="/login" replace />;
+
+  return (
+    <div className="min-h-screen sm:h-screen sm:overflow-hidden flex flex-col sm:flex-row bg-[#080b10] text-[#f1f5f9]">
+      {/* If the user has not selected their supported club yet, prompt immediately */}
+      {!user.onboardingCompleted && (
+        <SupportedTeamModal isOpen={true} isOnboarding={true} />
+      )}
+
+      {/* Fixed viewport-height desktop sidebar */}
+      <nav className="hidden sm:flex sm:flex-col w-60 shrink-0 border-r border-white/[0.08] h-full p-4 bg-[#0c1017]/80 backdrop-blur-xl">
+        {/* Top brand logo */}
+        <div className="shrink-0 flex items-center justify-between mb-5 px-2">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500/20 to-teal-400/20 border border-emerald-500/40 flex items-center justify-center text-lg shadow-[0_0_15px_rgba(16,185,129,0.25)]">
+              ⚽
+            </div>
+            <span className="text-xl font-black tracking-tight text-white">
+              Match<span className="text-emerald-400">log</span>
+            </span>
+          </div>
+          <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[10px] font-extrabold text-emerald-400 tracking-wider">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            LIVE
+          </span>
+        </div>
+
+        {/* Scrollable navigation link list */}
+        <div className="flex-1 overflow-y-auto min-h-0 space-y-1 pr-1 -mr-1">
+          {NAV_ITEMS.map((item) => (
+            <NavItem key={item.to} {...item} />
+          ))}
+        </div>
+
+        {/* Pinned user profile & data source footer */}
+        <div className="shrink-0 pt-3 mt-auto border-t border-white/[0.08] space-y-2">
+          <NavLink
+            to="/profile"
+            viewTransition
+            className={({ isActive }) =>
+              `group flex items-center gap-3 p-2.5 rounded-2xl transition-all duration-200 border ${
+                isActive
+                  ? "bg-white/[0.08] border-emerald-500/40 text-white shadow-sm"
+                  : "bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.06] hover:border-white/[0.12] text-slate-300"
+              }`
+            }
+          >
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center font-black text-xs text-black shadow-md shrink-0 overflow-hidden">
+              {user.avatar ? (
+                <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
+              ) : (
+                user.username[0]?.toUpperCase()
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-extrabold text-xs truncate text-white leading-tight group-hover:text-emerald-400 transition-colors">
+                {user.username}
+              </p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                {user.supportedTeam ? (
+                  <span className="text-[10px] text-emerald-400 font-semibold truncate flex items-center gap-1 shrink-0">
+                    {user.supportedTeam.logoUrl && (
+                      <img src={user.supportedTeam.logoUrl} alt="" className="w-2.5 h-2.5 object-contain inline" />
+                    )}
+                    {user.supportedTeam.shortName || user.supportedTeam.name}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-slate-400 truncate">Neutral fan</span>
+                )}
+              </div>
+            </div>
+          </NavLink>
+
+          <p className="px-2 text-[10px] text-slate-500 leading-snug">
+            Football data via{" "}
+            <a
+              href="https://github.com/openfootball/football.json"
+              target="_blank"
+              rel="noreferrer"
+              className="text-slate-400 underline hover:text-white transition-colors"
+            >
+              OpenFootball
+            </a>{" "}
+            &{" "}
+            <a
+              href="https://www.football-data.org"
+              target="_blank"
+              rel="noreferrer"
+              className="text-slate-400 underline hover:text-white transition-colors"
+            >
+              football-data.org
+            </a>
+          </p>
+        </div>
+      </nav>
+
+      {/* Independently scrollable main content with smooth page transitions */}
+      <main ref={mainRef} className="flex-1 sm:h-full sm:overflow-y-auto sm:overflow-x-hidden pb-24 sm:pb-0">
+        <div key={location.pathname} className="animate-page-in min-h-full">
+          <ErrorBoundary resetKeys={[location.pathname]}>
+            <Outlet />
+          </ErrorBoundary>
+        </div>
+      </main>
+
+      {/* Floating frosted-glass mobile bottom dock */}
+      <nav className="sm:hidden fixed bottom-3 left-3 right-3 z-50 glass-panel rounded-2xl border border-white/10 shadow-[0_12px_36px_rgba(0,0,0,0.8)] px-2 py-1.5 flex justify-around items-center">
+        {NAV_ITEMS.filter((item) => MOBILE_NAV_ITEMS.includes(item.to)).map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            viewTransition
+            className={({ isActive }) =>
+              `flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition-all duration-150 relative ${
+                isActive
+                  ? "text-emerald-400 scale-105"
+                  : "text-slate-400 hover:text-slate-200"
+              }`
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <span className="text-base select-none leading-none">{item.icon}</span>
+                <span className="text-[10px] font-bold tracking-tight">{item.label}</span>
+                {isActive && (
+                  <span className="absolute -bottom-1 w-1 h-1 rounded-full bg-emerald-400" />
+                )}
+              </>
+            )}
+          </NavLink>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+function NavItem({ to, label, icon }: { to: string; label: string; icon: string }) {
+  return (
+    <NavLink
+      to={to}
+      viewTransition
+      className={({ isActive }) =>
+        `group flex items-center justify-between px-3 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-150 relative ${
+          isActive
+            ? "bg-emerald-500/10 border border-emerald-500/40 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.15)]"
+            : "text-slate-400 hover:text-slate-100 hover:bg-white/[0.04] border border-transparent"
+        }`
+      }
+    >
+      {({ isActive }) => (
+        <>
+          <div className="flex items-center gap-3">
+            <span className="text-base select-none group-hover:scale-110 transition-transform duration-150">
+              {icon}
+            </span>
+            <span>{label}</span>
+          </div>
+          {isActive && (
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]" />
+          )}
+        </>
+      )}
+    </NavLink>
+  );
+}

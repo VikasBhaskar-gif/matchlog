@@ -1,0 +1,1 @@
+ALTER TABLE "matches" ADD COLUMN "kickoff_time_confirmed" boolean DEFAULT true NOT NULL;

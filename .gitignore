@@ -1,0 +1,13 @@
+node_modules/
+dist/
+build/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+coverage/
+.vite/
+backend/dist/
+frontend/dist/
+generate-og-card.py

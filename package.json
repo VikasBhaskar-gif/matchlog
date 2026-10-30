@@ -1,0 +1,10 @@
+{
+  "name": "matchlog",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm --prefix frontend install && npm --prefix frontend run build && npm --prefix backend install && npm --prefix backend run build",
+    "start": "node backend/dist/server.js"
+  }
+}
