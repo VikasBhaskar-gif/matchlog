@@ -18,8 +18,8 @@ export function PredictModal({ match, existingPrediction, onClose, onSaved }: Pr
     match.status === "FINISHED" ||
     new Date(match.kickoffAt).getTime() <= Date.now();
 
-  const [homeScore, setHomeScore] = useState(existing?.predictedHomeScore ?? 2);
-  const [awayScore, setAwayScore] = useState(existing?.predictedAwayScore ?? 1);
+  const [homeScore, setHomeScore] = useState(existing?.predictedHomeScore ?? 0);
+  const [awayScore, setAwayScore] = useState(existing?.predictedAwayScore ?? 0);
   const [goesToExtraTime, setGoesToExtraTime] = useState(existing?.predictedGoesToExtraTime ?? false);
   const [goesToPenalties, setGoesToPenalties] = useState(existing?.predictedGoesToPenalties ?? false);
   const [advancingSide, setAdvancingSide] = useState<"HOME" | "AWAY">(
