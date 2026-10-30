@@ -93,7 +93,7 @@ export async function buildApp() {
       return;
     }
     request.log.error(error);
-    reply.code(500).send({ error: "Internal server error", message: (error as any)?.message, stack: (error as any)?.stack });
+    reply.code(500).send({ error: "Internal server error" });
   });
 
   await app.register(authRoutes);
@@ -112,120 +112,7 @@ export async function buildApp() {
   await app.register(friendsRoutes);
   await app.register(reviewRoutes);
 
-  app.get("/api/test-login-vikas", async () => {
-    try {
-      const { loginUser } = await import("./services/auth.service.js");
-      const user = await loginUser({ identifier: "VikasBhaskar", password: "amaterasu17" });
-      return { ok: true, user: { id: user.id, username: user.username } };
-    } catch (err: any) {
-      return { ok: false, error: err.message, stack: err.stack };
-    }
-  });
-
   app.get("/api/health", async () => ({ ok: true, env: env.NODE_ENV }));
-
-  app.get("/api/db-diagnostics", async () => {
-    const result: any = {
-      env: env.NODE_ENV,
-      cwd: process.cwd(),
-      hasDbUrl: !!env.DATABASE_URL,
-      maskedUrl: env.DATABASE_URL ? env.DATABASE_URL.replace(/:[^:@]*@/, ":****@") : null,
-    };
-
-    const dumpCandidates = [
-      path.resolve(__dirname, "data_dump.sql"),
-      path.resolve(__dirname, "db/data_dump.sql"),
-      path.resolve(__dirname, "../src/db/data_dump.sql"),
-      path.resolve(__dirname, "../../src/db/data_dump.sql"),
-      path.resolve(process.cwd(), "src/db/data_dump.sql"),
-      path.resolve(process.cwd(), "backend/src/db/data_dump.sql"),
-      path.resolve(process.cwd(), "dist/db/data_dump.sql"),
-      path.resolve(process.cwd(), "backend/dist/db/data_dump.sql"),
-    ];
-    result.dumpSearch = dumpCandidates.map((p) => ({ path: p, exists: fs.existsSync(p) }));
-    const foundDump = dumpCandidates.find((p) => fs.existsSync(p));
-    result.dumpFound = foundDump ?? null;
-    if (foundDump) {
-      result.dumpSize = fs.statSync(foundDump).size;
-    }
-
-    try {
-      const sslOption =
-        env.NODE_ENV === "production" || env.DATABASE_URL.includes("sslmode=require")
-          ? { rejectUnauthorized: false }
-          : false;
-
-      const rawSql = postgres(env.DATABASE_URL, {
-        max: 1,
-        ssl: sslOption,
-      });
-
-      const tables = await rawSql`
-        SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public'
-      `;
-      result.tables = tables.map((t: any) => t.tablename);
-
-      if (result.tables.includes("users")) {
-        const userCount = await rawSql`SELECT count(*) FROM users`;
-        result.userCount = parseInt(userCount[0].count, 10);
-
-        const vikas = await rawSql`SELECT id, username, supported_team_id FROM users WHERE username = 'VikasBhaskar'`;
-        result.vikas = vikas[0] ?? null;
-      }
-
-      if (result.tables.includes("teams")) {
-        const teamCount = await rawSql`SELECT count(*) FROM teams`;
-        result.teamCount = parseInt(teamCount[0].count, 10);
-      }
-
-      await rawSql.end();
-      result.ok = true;
-    } catch (err: any) {
-      result.ok = false;
-      result.error = err.message;
-      result.code = err.code;
-      result.stack = err.stack;
-    }
-
-    return result;
-  });
-
-  app.post("/api/db-seed", async () => {
-    try {
-      const { ensureDatabaseSeeded } = await import("./db/restore-dump.js");
-      const seedResult = await ensureDatabaseSeeded();
-      return { ok: true, seedResult };
-    } catch (err: any) {
-      return { ok: false, error: err.message, stack: err.stack };
-    }
-  });
-
-  app.all("/api/admin-reset-vikas", async () => {
-    try {
-      const sslOption =
-        env.NODE_ENV === "production" || env.DATABASE_URL.includes("sslmode=require")
-          ? { rejectUnauthorized: false }
-          : false;
-
-      const rawSql = postgres(env.DATABASE_URL, { max: 1, ssl: sslOption });
-      const newHash = "$argon2id$v=19$m=65536,t=3,p=4$NGhsYhkTDkrau9PG7tjWYg$oSv7AF9Cu0aDA1wFHTH0diYI5mdXJLtmgo28gFmAf60";
-
-      const existing = await rawSql`SELECT id FROM users WHERE username = 'VikasBhaskar'`;
-      if (existing.length > 0) {
-        await rawSql`UPDATE users SET password_hash = ${newHash} WHERE username = 'VikasBhaskar'`;
-        await rawSql.end();
-        return { ok: true, status: "password updated to amaterasu17" };
-      } else {
-        const { ensureDatabaseSeeded } = await import("./db/restore-dump.js");
-        const seedRes = await ensureDatabaseSeeded();
-        await rawSql`UPDATE users SET password_hash = ${newHash} WHERE username = 'VikasBhaskar'`;
-        await rawSql.end();
-        return { ok: true, status: "user created and password set to amaterasu17", seedRes };
-      }
-    } catch (err: any) {
-      return { ok: false, error: err.message, stack: err.stack };
-    }
-  });
 
   const distCandidates = [
     path.resolve(__dirname, "../../frontend/dist"),
