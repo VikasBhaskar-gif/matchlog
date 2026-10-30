@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
@@ -257,6 +257,32 @@ function LeaderboardTab() {
   );
   const { user } = useAuth();
 
+  const leaguesScrollRef = useRef<HTMLDivElement>(null);
+  const [leaguesScrollProgress, setLeaguesScrollProgress] = useState(0);
+
+  const checkLeaguesScroll = () => {
+    if (!leaguesScrollRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = leaguesScrollRef.current;
+    const maxScroll = scrollWidth - clientWidth;
+    if (maxScroll > 0) {
+      setLeaguesScrollProgress(Math.min(1, Math.max(0, scrollLeft / maxScroll)));
+    } else {
+      setLeaguesScrollProgress(0);
+    }
+  };
+
+  useEffect(() => {
+    checkLeaguesScroll();
+    window.addEventListener("resize", checkLeaguesScroll);
+    return () => window.removeEventListener("resize", checkLeaguesScroll);
+  }, [metric]);
+
+  const scrollLeagues = (direction: "left" | "right") => {
+    if (!leaguesScrollRef.current) return;
+    const amount = direction === "left" ? -240 : 240;
+    leaguesScrollRef.current.scrollBy({ left: amount, behavior: "smooth" });
+  };
+
   const leagues = useMemo(() => {
     return (competitions.data?.competitions ?? []).filter((c) => c.type === "league" || c.name.includes("League"));
   }, [competitions.data?.competitions]);
@@ -292,34 +318,75 @@ function LeaderboardTab() {
         </button>
       </div>
 
-      {/* When Prediction Points is active: League Pills (Overall + Leagues) */}
+      {/* When Prediction Points is active: League Pills (Overall + Leagues) with Green Scrollbar and Indicator */}
       {metric === "predictions" && (
-        <div className="flex gap-1.5 overflow-x-auto pb-1.5 pt-0.5 no-scrollbar scroll-smooth">
-          <button
-            type="button"
-            onClick={() => setSelectedLeagueId("all")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-              selectedLeagueId === "all"
-                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.2)] font-black"
-                : "bg-white/[0.04] text-slate-400 hover:text-white border border-white/10 hover:border-emerald-500/30"
-            }`}
-          >
-            All (All Leagues)
-          </button>
-          {leagues.map((c) => (
+        <div className="space-y-2 p-2.5 rounded-2xl bg-gradient-to-r from-emerald-950/30 via-[#07130e]/60 to-emerald-950/20 border border-emerald-500/25 shadow-sm">
+          <div className="relative flex items-center">
+            {/* Scroll Left Button (desktop) */}
             <button
-              key={c.id}
               type="button"
-              onClick={() => setSelectedLeagueId(c.id)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
-                selectedLeagueId === c.id
-                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.2)] font-black"
-                  : "bg-white/[0.04] text-slate-400 hover:text-white border border-white/10 hover:border-emerald-500/30"
-              }`}
+              onClick={() => scrollLeagues("left")}
+              className="hidden sm:flex items-center justify-center w-6 h-6 rounded-lg bg-emerald-950/80 border border-emerald-500/30 text-emerald-400 hover:text-emerald-200 hover:bg-emerald-900/80 mr-1.5 shrink-0 transition-all cursor-pointer shadow-sm text-xs"
+              title="Scroll left"
             >
-              <span>{c.name}</span>
+              ◀
             </button>
-          ))}
+
+            {/* Scrollable Container with custom green scrollbar */}
+            <div
+              ref={leaguesScrollRef}
+              onScroll={checkLeaguesScroll}
+              className="flex-1 flex gap-1.5 overflow-x-auto pb-2 pt-0.5 green-scrollbar scroll-smooth"
+            >
+              <button
+                type="button"
+                onClick={() => setSelectedLeagueId("all")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                  selectedLeagueId === "all"
+                    ? "bg-emerald-500/25 text-emerald-300 border border-emerald-400/60 shadow-[0_0_14px_rgba(16,185,129,0.3)] font-black"
+                    : "bg-white/[0.04] text-slate-400 hover:text-white border border-white/10 hover:border-emerald-500/30"
+                }`}
+              >
+                All (All Leagues)
+              </button>
+              {leagues.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setSelectedLeagueId(c.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                    selectedLeagueId === c.id
+                      ? "bg-emerald-500/25 text-emerald-300 border border-emerald-400/60 shadow-[0_0_14px_rgba(16,185,129,0.3)] font-black"
+                      : "bg-white/[0.04] text-slate-400 hover:text-white border border-white/10 hover:border-emerald-500/30"
+                  }`}
+                >
+                  <span>{c.name}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Scroll Right Button (desktop) */}
+            <button
+              type="button"
+              onClick={() => scrollLeagues("right")}
+              className="hidden sm:flex items-center justify-center w-6 h-6 rounded-lg bg-emerald-950/80 border border-emerald-500/30 text-emerald-400 hover:text-emerald-200 hover:bg-emerald-900/80 ml-1.5 shrink-0 transition-all cursor-pointer shadow-sm text-xs"
+              title="Scroll right"
+            >
+              ▶
+            </button>
+          </div>
+
+          {/* Green indicator bar matching the mobile dock style */}
+          <div className="w-full flex items-center justify-center pt-0.5">
+            <div className="w-28 h-1 bg-emerald-950/80 border border-emerald-500/25 rounded-full overflow-hidden relative">
+              <div
+                className="h-full w-10 bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.7)] transition-transform duration-75"
+                style={{
+                  transform: `translateX(${leaguesScrollProgress * (112 - 40)}px)`,
+                }}
+              />
+            </div>
+          </div>
         </div>
       )}
 

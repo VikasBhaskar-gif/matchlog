@@ -58,6 +58,30 @@ body {
   background: rgba(255, 255, 255, 0.22);
 }
 
+/* Custom emerald scrollbar for horizontal league pills and lists */
+.green-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #10b981 rgba(5, 46, 32, 0.4);
+}
+.green-scrollbar::-webkit-scrollbar {
+  height: 7px;
+}
+.green-scrollbar::-webkit-scrollbar-track {
+  background: rgba(4, 30, 21, 0.6);
+  border-radius: 9999px;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  margin: 0 4px;
+}
+.green-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, #10b981, #34d399);
+  border-radius: 9999px;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
+}
+.green-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, #34d399, #6ee7b7);
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.9);
+}
+
 /* Modern Glass & Glow Utility Classes */
 .glass-panel {
   background: rgba(15, 21, 32, 0.7);
