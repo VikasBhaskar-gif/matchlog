@@ -179,6 +179,8 @@ export type FriendActivityEntry = {
   user: { id: string; username: string; avatar: string | null };
 };
 
+export type FriendStatus = "SELF" | "FRIENDS" | "OUTGOING_PENDING" | "INCOMING_PENDING" | "NONE";
+
 export type UserProfile = {
   id: string;
   username: string;
@@ -189,11 +191,15 @@ export type UserProfile = {
   currentStreak: number;
   longestStreak: number;
   memberSince: string;
-  isFollowing: boolean;
-  isFollowedBy: boolean;
   isFriend: boolean;
-  followersCount: number;
-  followingCount: number;
+  friendStatus?: FriendStatus;
+  friendRequestId?: string | null;
+  friendshipId?: string | null;
+  friendsCount?: number;
+  isFollowing?: boolean;
+  isFollowedBy?: boolean;
+  followersCount?: number;
+  followingCount?: number;
 };
 
 export type LeaderboardEntry = {

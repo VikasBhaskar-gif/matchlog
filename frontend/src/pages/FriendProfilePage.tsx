@@ -14,7 +14,8 @@ export function FriendProfilePage() {
   const { user: currentUser } = useAuth();
   const { data, isLoading, isError, refetch } = useUserProfile(id);
   const qc = useQueryClient();
-  const [followPending, setFollowPending] = useState(false);
+  const [actionPending, setActionPending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "stats">("overview");
 
   if (isLoading) return <LoadingState label="Loading profile..." />;
@@ -24,21 +25,83 @@ export function FriendProfilePage() {
   const isMe = currentUser?.id === p.id;
   const supportedTeamStyle = p.supportedTeam ? getClubStyle(p.supportedTeam.name) : null;
 
-  async function handleToggleFollow() {
-    if (!id || followPending || isMe) return;
-    setFollowPending(true);
+  async function handleSendRequest() {
+    if (!id || actionPending || isMe) return;
+    setActionPending(true);
+    setActionError(null);
     try {
-      if (p.isFollowing) {
-        await api.delete(`/users/${id}/follow`);
-      } else {
-        await api.post(`/users/${id}/follow`);
-      }
-      qc.invalidateQueries({ queryKey: ["user-profile", id] });
-      qc.invalidateQueries({ queryKey: ["friends"] });
-    } catch (err) {
-      console.error("Follow toggle failed:", err);
+      await api.post("/friends/requests", { receiverId: id });
+      await qc.invalidateQueries({ queryKey: ["user-profile", id] });
+      await qc.invalidateQueries({ queryKey: ["friends"] });
+    } catch (err: any) {
+      setActionError(err?.message || "Failed to send friend request");
     } finally {
-      setFollowPending(false);
+      setActionPending(false);
+    }
+  }
+
+  async function handleAcceptRequest() {
+    if (actionPending) return;
+    setActionPending(true);
+    setActionError(null);
+    try {
+      if (p.friendRequestId) {
+        await api.post(`/friends/requests/${p.friendRequestId}/accept`);
+      } else {
+        await api.post("/friends/requests", { receiverId: id });
+      }
+      await qc.invalidateQueries({ queryKey: ["user-profile", id] });
+      await qc.invalidateQueries({ queryKey: ["friends"] });
+    } catch (err: any) {
+      setActionError(err?.message || "Failed to accept friend request");
+    } finally {
+      setActionPending(false);
+    }
+  }
+
+  async function handleDeclineRequest() {
+    if (!p.friendRequestId || actionPending) return;
+    setActionPending(true);
+    setActionError(null);
+    try {
+      await api.post(`/friends/requests/${p.friendRequestId}/decline`);
+      await qc.invalidateQueries({ queryKey: ["user-profile", id] });
+      await qc.invalidateQueries({ queryKey: ["friends"] });
+    } catch (err: any) {
+      setActionError(err?.message || "Failed to decline friend request");
+    } finally {
+      setActionPending(false);
+    }
+  }
+
+  async function handleCancelRequest() {
+    if (!p.friendRequestId || actionPending) return;
+    setActionPending(true);
+    setActionError(null);
+    try {
+      await api.post(`/friends/requests/${p.friendRequestId}/cancel`);
+      await qc.invalidateQueries({ queryKey: ["user-profile", id] });
+      await qc.invalidateQueries({ queryKey: ["friends"] });
+    } catch (err: any) {
+      setActionError(err?.message || "Failed to cancel friend request");
+    } finally {
+      setActionPending(false);
+    }
+  }
+
+  async function handleRemoveFriend() {
+    if (!id || actionPending) return;
+    if (!window.confirm(`Are you sure you want to remove ${p.username} from your friends?`)) return;
+    setActionPending(true);
+    setActionError(null);
+    try {
+      await api.delete(`/friends/${id}`);
+      await qc.invalidateQueries({ queryKey: ["user-profile", id] });
+      await qc.invalidateQueries({ queryKey: ["friends"] });
+    } catch (err: any) {
+      setActionError(err?.message || "Failed to remove friend");
+    } finally {
+      setActionPending(false);
     }
   }
 
@@ -94,11 +157,8 @@ export function FriendProfilePage() {
               </div>
               <div className="flex items-center gap-3 mt-2 text-xs text-slate-400">
                 <span>
-                  <strong className="text-white font-extrabold">{p.followersCount ?? 0}</strong> Followers
-                </span>
-                <span>•</span>
-                <span>
-                  <strong className="text-white font-extrabold">{p.followingCount ?? 0}</strong> Following
+                  <strong className="text-white font-extrabold">{p.friendsCount ?? (p.isFriend ? 1 : 0)}</strong>{" "}
+                  {(p.friendsCount ?? (p.isFriend ? 1 : 0)) === 1 ? "Friend" : "Friends"}
                 </span>
               </div>
             </div>
@@ -114,26 +174,70 @@ export function FriendProfilePage() {
               >
                 Go to My Profile →
               </Link>
-            ) : (
-              <>
+            ) : p.isFriend || p.friendStatus === "FRIENDS" ? (
+              <div className="flex items-center gap-2">
+                <span className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center gap-1.5 shadow-sm">
+                  <span>✓</span>
+                  <span>Friends</span>
+                </span>
                 <button
-                  onClick={handleToggleFollow}
-                  disabled={followPending}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer ${
-                    p.isFollowing
-                      ? "bg-white/[0.06] text-emerald-400 border border-emerald-500/40 hover:bg-white/[0.1] hover:scale-[1.02] active:scale-[0.98]"
-                      : "bg-emerald-500 text-black hover:bg-emerald-400 hover:scale-[1.02] active:scale-[0.98] shadow-emerald-500/20"
-                  }`}
+                  type="button"
+                  onClick={handleRemoveFriend}
+                  disabled={actionPending}
+                  className="px-3 py-2 rounded-xl text-xs font-semibold bg-white/[0.05] hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-white/10 hover:border-rose-500/30 transition-all cursor-pointer"
+                  title="Remove Friend"
                 >
-                  {p.isFollowing ? "✓ Following" : "+ Follow User"}
+                  {actionPending ? "..." : "Unfriend"}
                 </button>
-                {p.isFollowedBy && !p.isFollowing && (
-                  <span className="text-[11px] text-emerald-400 font-medium">Follows you</span>
-                )}
-                {p.isFollowedBy && p.isFollowing && (
-                  <span className="text-[11px] text-emerald-400 font-medium">Mutual Follow · Friends</span>
-                )}
-              </>
+              </div>
+            ) : p.friendStatus === "OUTGOING_PENDING" ? (
+              <div className="flex items-center gap-2">
+                <span className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white/[0.06] border border-white/15 text-slate-300 flex items-center gap-1.5">
+                  <span className="animate-pulse">⌛</span>
+                  <span>Request Sent</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCancelRequest}
+                  disabled={actionPending}
+                  className="px-3 py-2 rounded-xl text-xs font-semibold bg-white/[0.05] hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-white/10 hover:border-rose-500/30 transition-all cursor-pointer"
+                  title="Cancel Request"
+                >
+                  {actionPending ? "..." : "Cancel"}
+                </button>
+              </div>
+            ) : p.friendStatus === "INCOMING_PENDING" ? (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleAcceptRequest}
+                  disabled={actionPending}
+                  className="px-3.5 py-2 rounded-xl text-xs font-black bg-emerald-500 text-black hover:bg-emerald-400 shadow-md shadow-emerald-500/20 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  {actionPending ? "..." : "Accept Request"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeclineRequest}
+                  disabled={actionPending}
+                  className="px-3 py-2 rounded-xl text-xs font-semibold bg-white/[0.05] hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-white/10 hover:border-rose-500/30 transition-all cursor-pointer"
+                >
+                  Decline
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSendRequest}
+                disabled={actionPending}
+                className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-500 text-black hover:bg-emerald-400 hover:scale-[1.02] active:scale-[0.98] shadow-md shadow-emerald-500/20 transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <span>+</span>
+                <span>{actionPending ? "Sending..." : "Add Friend"}</span>
+              </button>
+            )}
+            {actionError && (
+              <span className="text-[11px] text-rose-400 font-medium">{actionError}</span>
             )}
           </div>
         </div>

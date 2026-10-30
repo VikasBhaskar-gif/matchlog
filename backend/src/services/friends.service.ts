@@ -167,53 +167,93 @@ export async function followUser(followerId: string, followingId: string) {
   const target = await db.query.users.findFirst({ where: eq(users.id, followingId) });
   if (!target) throw new FriendError("User not found.", 404);
 
-  // Insert follow
-  await db
-    .insert(userFollows)
-    .values({ followerId, followingId })
-    .onConflictDoNothing();
-
-  // Check for mutual follow -> automatically establish friendship
-  const reverseFollow = await db.query.userFollows.findFirst({
-    where: and(eq(userFollows.followerId, followingId), eq(userFollows.followingId, followerId)),
-  });
-
-  let becameFriends = false;
-  if (reverseFollow) {
-    const [a, b] = orderedPair(followerId, followingId);
-    await db.insert(friendships).values({ userAId: a, userBId: b }).onConflictDoNothing();
-    becameFriends = true;
+  // Send a friend request instead
+  try {
+    const request = await sendFriendRequest(followerId, followingId);
+    return { ok: true, request };
+  } catch (err: any) {
+    return { ok: true };
   }
-
-  return { ok: true, becameFriends };
 }
 
 export async function unfollowUser(followerId: string, followingId: string) {
-  await db
-    .delete(userFollows)
-    .where(and(eq(userFollows.followerId, followerId), eq(userFollows.followingId, followingId)));
+  try {
+    await removeFriend(followerId, followingId);
+  } catch {}
   return { ok: true };
 }
 
-export async function getFollowStatus(currentUserId: string, targetUserId: string) {
-  const [isFollowing, isFollowedBy, isFriend, followers, following] = await Promise.all([
-    db.query.userFollows.findFirst({
-      where: and(eq(userFollows.followerId, currentUserId), eq(userFollows.followingId, targetUserId)),
+export async function getFriendshipStatus(currentUserId: string, targetUserId: string) {
+  if (currentUserId === targetUserId) {
+    const [friendsCountRes] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(friendships)
+      .where(or(eq(friendships.userAId, targetUserId), eq(friendships.userBId, targetUserId)));
+
+    return {
+      isFriend: false,
+      friendStatus: "SELF" as const,
+      friendRequestId: null as string | null,
+      friendshipId: null as string | null,
+      friendsCount: Number(friendsCountRes?.count ?? 0),
+      isFollowing: false,
+      isFollowedBy: false,
+      followersCount: 0,
+      followingCount: 0,
+    };
+  }
+
+  const [a, b] = orderedPair(currentUserId, targetUserId);
+
+  const [friendship, outgoingRequest, incomingRequest, friendsCountRes] = await Promise.all([
+    db.query.friendships.findFirst({
+      where: and(eq(friendships.userAId, a), eq(friendships.userBId, b)),
     }),
-    db.query.userFollows.findFirst({
-      where: and(eq(userFollows.followerId, targetUserId), eq(userFollows.followingId, currentUserId)),
+    db.query.friendRequests.findFirst({
+      where: and(
+        eq(friendRequests.senderId, currentUserId),
+        eq(friendRequests.receiverId, targetUserId),
+        eq(friendRequests.status, "PENDING")
+      ),
     }),
-    areFriends(currentUserId, targetUserId),
-    db.select({ count: sql<number>`count(*)` }).from(userFollows).where(eq(userFollows.followingId, targetUserId)),
-    db.select({ count: sql<number>`count(*)` }).from(userFollows).where(eq(userFollows.followerId, targetUserId)),
+    db.query.friendRequests.findFirst({
+      where: and(
+        eq(friendRequests.senderId, targetUserId),
+        eq(friendRequests.receiverId, currentUserId),
+        eq(friendRequests.status, "PENDING")
+      ),
+    }),
+    db.select({ count: sql<number>`count(*)` })
+      .from(friendships)
+      .where(or(eq(friendships.userAId, targetUserId), eq(friendships.userBId, targetUserId))),
   ]);
 
+  const isFriend = !!friendship;
+  let friendStatus: "SELF" | "FRIENDS" | "OUTGOING_PENDING" | "INCOMING_PENDING" | "NONE" = "NONE";
+  let activeRequestId: string | null = null;
+
+  if (isFriend) {
+    friendStatus = "FRIENDS";
+  } else if (outgoingRequest) {
+    friendStatus = "OUTGOING_PENDING";
+    activeRequestId = outgoingRequest.id;
+  } else if (incomingRequest) {
+    friendStatus = "INCOMING_PENDING";
+    activeRequestId = incomingRequest.id;
+  }
+
   return {
-    isFollowing: !!isFollowing,
-    isFollowedBy: !!isFollowedBy,
     isFriend,
-    followersCount: Number(followers[0]?.count ?? 0),
-    followingCount: Number(following[0]?.count ?? 0),
+    friendStatus,
+    friendRequestId: activeRequestId,
+    friendshipId: friendship?.id ?? null,
+    friendsCount: Number(friendsCountRes[0]?.count ?? 0),
+    isFollowing: false,
+    isFollowedBy: false,
+    followersCount: 0,
+    followingCount: 0,
   };
 }
+
+export const getFollowStatus = getFriendshipStatus;
 

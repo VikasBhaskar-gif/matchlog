@@ -17,6 +17,7 @@ import {
   searchUsers,
   getFriendActivityFeed,
   areFriends,
+  getFriendshipStatus,
   followUser,
   unfollowUser,
   getFollowStatus,
@@ -145,7 +146,7 @@ export default async function friendsRoutes(app: FastifyInstance) {
       .from(watchedMatches)
       .where(eq(watchedMatches.userId, user.id));
 
-    const followStatus = await getFollowStatus(request.currentUser!.id, user.id);
+    const friendStatus = await getFriendshipStatus(request.currentUser!.id, user.id);
 
     return {
       profile: {
@@ -155,7 +156,7 @@ export default async function friendsRoutes(app: FastifyInstance) {
         currentStreak: user.currentStreak,
         longestStreak: user.longestStreak,
         memberSince: user.createdAt,
-        ...followStatus,
+        ...friendStatus,
       },
     };
   });
@@ -175,7 +176,7 @@ export default async function friendsRoutes(app: FastifyInstance) {
       .from(watchedMatches)
       .where(eq(watchedMatches.userId, user.id));
 
-    const followStatus = await getFollowStatus(request.currentUser!.id, user.id);
+    const friendStatus = await getFriendshipStatus(request.currentUser!.id, user.id);
 
     let supportedTeam = null;
     if (user.supportedTeamId) {
@@ -200,7 +201,7 @@ export default async function friendsRoutes(app: FastifyInstance) {
         currentStreak: user.currentStreak,
         longestStreak: user.longestStreak,
         memberSince: user.createdAt,
-        ...followStatus,
+        ...friendStatus,
       },
     };
   });
