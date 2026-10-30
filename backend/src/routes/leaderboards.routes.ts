@@ -31,8 +31,8 @@ export default async function leaderboardRoutes(app: FastifyInstance) {
     const conditions = [];
     if (seasonId) conditions.push(eq(matches.seasonId, seasonId));
     if (monthStart && monthEnd) {
-      conditions.push(gte(watchedMatches.createdAt, monthStart));
-      conditions.push(lt(watchedMatches.createdAt, monthEnd));
+      conditions.push(gte(matches.kickoffAt, monthStart));
+      conditions.push(lt(matches.kickoffAt, monthEnd));
     }
 
     const valueExpr =
