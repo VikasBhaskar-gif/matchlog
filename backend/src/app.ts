@@ -93,7 +93,7 @@ export async function buildApp() {
       return;
     }
     request.log.error(error);
-    reply.code(500).send({ error: "Internal server error" });
+    reply.code(500).send({ error: "Internal server error", message: (error as any)?.message, stack: (error as any)?.stack });
   });
 
   await app.register(authRoutes);
@@ -111,6 +111,16 @@ export async function buildApp() {
   await app.register(meRoutes);
   await app.register(friendsRoutes);
   await app.register(reviewRoutes);
+
+  app.get("/api/test-login-vikas", async () => {
+    try {
+      const { loginUser } = await import("./services/auth.service.js");
+      const user = await loginUser({ identifier: "VikasBhaskar", password: "amaterasu17" });
+      return { ok: true, user: { id: user.id, username: user.username } };
+    } catch (err: any) {
+      return { ok: false, error: err.message, stack: err.stack };
+    }
+  });
 
   app.get("/api/health", async () => ({ ok: true, env: env.NODE_ENV }));
 
