@@ -114,9 +114,27 @@ export async function buildApp() {
   app.get("/api/db-diagnostics", async () => {
     const result: any = {
       env: env.NODE_ENV,
+      cwd: process.cwd(),
       hasDbUrl: !!env.DATABASE_URL,
       maskedUrl: env.DATABASE_URL ? env.DATABASE_URL.replace(/:[^:@]*@/, ":****@") : null,
     };
+
+    const dumpCandidates = [
+      path.resolve(__dirname, "data_dump.sql"),
+      path.resolve(__dirname, "db/data_dump.sql"),
+      path.resolve(__dirname, "../src/db/data_dump.sql"),
+      path.resolve(__dirname, "../../src/db/data_dump.sql"),
+      path.resolve(process.cwd(), "src/db/data_dump.sql"),
+      path.resolve(process.cwd(), "backend/src/db/data_dump.sql"),
+      path.resolve(process.cwd(), "dist/db/data_dump.sql"),
+      path.resolve(process.cwd(), "backend/dist/db/data_dump.sql"),
+    ];
+    result.dumpSearch = dumpCandidates.map((p) => ({ path: p, exists: fs.existsSync(p) }));
+    const foundDump = dumpCandidates.find((p) => fs.existsSync(p));
+    result.dumpFound = foundDump ?? null;
+    if (foundDump) {
+      result.dumpSize = fs.statSync(foundDump).size;
+    }
 
     try {
       const sslOption =
@@ -162,8 +180,8 @@ export async function buildApp() {
   app.post("/api/db-seed", async () => {
     try {
       const { ensureDatabaseSeeded } = await import("./db/restore-dump.js");
-      await ensureDatabaseSeeded();
-      return { ok: true, message: "Database check / seed completed successfully." };
+      const seedResult = await ensureDatabaseSeeded();
+      return { ok: true, seedResult };
     } catch (err: any) {
       return { ok: false, error: err.message, stack: err.stack };
     }

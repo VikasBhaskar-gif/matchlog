@@ -49,6 +49,8 @@ export async function ensureDatabaseSeeded() {
     console.log("[DB] Database is empty. Importing initial data...");
     const dumpCandidates = [
       path.resolve(__dirname, "data_dump.sql"),
+      path.resolve(__dirname, "db/data_dump.sql"),
+      path.resolve(__dirname, "../db/data_dump.sql"),
       path.resolve(__dirname, "../src/db/data_dump.sql"),
       path.resolve(__dirname, "../../src/db/data_dump.sql"),
       path.resolve(process.cwd(), "src/db/data_dump.sql"),
@@ -58,8 +60,9 @@ export async function ensureDatabaseSeeded() {
     ];
     const dumpPath = dumpCandidates.find((p) => fs.existsSync(p));
     if (!dumpPath) {
-      console.warn("[DB] data_dump.sql not found in candidate paths:", dumpCandidates);
-      return;
+      const msg = `data_dump.sql not found in candidate paths: ${JSON.stringify(dumpCandidates)}`;
+      console.warn("[DB]", msg);
+      return { ok: false, reason: msg };
     }
 
     console.log("[DB] Reading data dump from:", dumpPath);
@@ -79,6 +82,7 @@ export async function ensureDatabaseSeeded() {
     }
 
     console.log("[DB] Data dump successfully imported!");
+    return { ok: true, importedStatements: statements.length, dumpPath };
   } catch (err) {
     console.error("[DB] Migration / seeding error:", err);
     throw err;
