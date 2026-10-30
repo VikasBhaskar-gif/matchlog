@@ -11,6 +11,7 @@ export type MatchGoalEvent = {
   playerName: string;
   type: "GOAL" | "OWN_GOAL" | "PENALTY_GOAL";
   minute: number;
+  externalId: string | null;
 };
 
 function hashString(str: string): number {
@@ -36,7 +37,7 @@ function createPrng(seed: number) {
  */
 export async function getOrGenerateMatchEvents(matchId: string): Promise<MatchGoalEvent[]> {
   // 1. Check existing match_events
-  const existing = await db
+  let existing = await db
     .select({
       id: matchEvents.id,
       matchId: matchEvents.matchId,
@@ -45,11 +46,37 @@ export async function getOrGenerateMatchEvents(matchId: string): Promise<MatchGo
       playerName: sql<string>`coalesce(${players.name}, 'Goalscorer')`,
       type: matchEvents.type,
       minute: matchEvents.minute,
+      externalId: matchEvents.externalId,
     })
     .from(matchEvents)
     .leftJoin(players, eq(players.id, matchEvents.playerId))
     .where(eq(matchEvents.matchId, matchId))
     .orderBy(matchEvents.minute);
+
+  const hasOnlyGenerated = existing.some((e) => e.externalId?.startsWith("gen:goal:"));
+
+  // If missing or only fake generated events, try ESPN real goal sync
+  if (existing.length === 0 || hasOnlyGenerated) {
+    const { syncEspnGoalsForMatch } = await import("./espn-goal-sync.service.js");
+    const espnSynced = await syncEspnGoalsForMatch(matchId).catch(() => false);
+    if (espnSynced) {
+      existing = await db
+        .select({
+          id: matchEvents.id,
+          matchId: matchEvents.matchId,
+          teamId: matchEvents.teamId,
+          playerId: matchEvents.playerId,
+          playerName: sql<string>`coalesce(${players.name}, 'Goalscorer')`,
+          type: matchEvents.type,
+          minute: matchEvents.minute,
+          externalId: matchEvents.externalId,
+        })
+        .from(matchEvents)
+        .leftJoin(players, eq(players.id, matchEvents.playerId))
+        .where(eq(matchEvents.matchId, matchId))
+        .orderBy(matchEvents.minute);
+    }
+  }
 
   if (existing.length > 0) {
     return existing.filter(
@@ -132,6 +159,7 @@ export async function getOrGenerateMatchEvents(matchId: string): Promise<MatchGo
         playerName: sql<string>`coalesce(${players.name}, 'Goalscorer')`,
         type: matchEvents.type,
         minute: matchEvents.minute,
+        externalId: matchEvents.externalId,
       })
       .from(matchEvents)
       .leftJoin(players, eq(players.id, matchEvents.playerId))
@@ -290,6 +318,7 @@ export async function getOrGenerateMatchEvents(matchId: string): Promise<MatchGo
       playerName: sql<string>`coalesce(${players.name}, 'Goalscorer')`,
       type: matchEvents.type,
       minute: matchEvents.minute,
+      externalId: matchEvents.externalId,
     })
     .from(matchEvents)
     .leftJoin(players, eq(players.id, matchEvents.playerId))

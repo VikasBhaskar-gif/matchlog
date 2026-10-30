@@ -185,6 +185,9 @@ export async function syncLiveMatchScores() {
 
         if (newStatus === "LIVE" || newStatus === "PAUSED") {
           await db.delete(matchEvents).where(eq(matchEvents.matchId, dbMatch.id)).catch(() => {});
+        } else if (newStatus === "FINISHED") {
+          const { syncEspnGoalsForMatch } = await import("./espn-goal-sync.service.js");
+          await syncEspnGoalsForMatch(dbMatch.id).catch(() => {});
         }
 
         updatedCount++;
