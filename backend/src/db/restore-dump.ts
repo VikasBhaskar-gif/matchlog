@@ -65,26 +65,23 @@ export async function ensureDatabaseSeeded() {
     console.log("[DB] Reading data dump from:", dumpPath);
     const rawSql = fs.readFileSync(dumpPath, "utf-8");
 
-    // Clean SQL: filter out psql slash commands (\restrict, \unrestrict) and duplicate drizzle migration records
-    const cleanLines = rawSql
-      .split(/\r?\n/)
-      .filter((line) => {
-        const trimmed = line.trim();
-        if (trimmed.startsWith("\\")) return false;
-        if (trimmed.startsWith("INSERT INTO drizzle.__drizzle_migrations")) return false;
-        return true;
-      });
+    const statements = rawSql
+      .split(/;\r?\n/)
+      .map((s) => s.trim())
+      .filter((s) => s.startsWith("INSERT INTO public."))
+      .map((s) => (s.endsWith(";") ? s.slice(0, -1) : s) + " ON CONFLICT DO NOTHING;");
 
-    const cleanedSql = cleanLines.join("\n");
-
-    console.log("[DB] Executing data dump inserts...");
-    await sql.begin(async (tx) => {
-      await tx.unsafe(cleanedSql);
-    });
+    console.log(`[DB] Found ${statements.length} INSERT statements to execute in batches...`);
+    const batchSize = 100;
+    for (let i = 0; i < statements.length; i += batchSize) {
+      const batch = statements.slice(i, i + batchSize).join("\n");
+      await sql.unsafe(batch);
+    }
 
     console.log("[DB] Data dump successfully imported!");
   } catch (err) {
     console.error("[DB] Migration / seeding error:", err);
+    throw err;
   } finally {
     await sql.end();
   }
