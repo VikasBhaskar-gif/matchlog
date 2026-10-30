@@ -10,7 +10,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export async function ensureDatabaseSeeded() {
-  const sql = postgres(env.DATABASE_URL, { max: 1 });
+  const sslOption =
+    env.NODE_ENV === "production" || env.DATABASE_URL.includes("sslmode=require")
+      ? { rejectUnauthorized: false }
+      : false;
+
+  const sql = postgres(env.DATABASE_URL, { max: 1, ssl: sslOption });
   const db = drizzle(sql);
 
   try {
@@ -74,9 +79,7 @@ export async function ensureDatabaseSeeded() {
 
     console.log("[DB] Executing data dump inserts...");
     await sql.begin(async (tx) => {
-      await tx.unsafe("SET session_replication_role = 'replica';");
       await tx.unsafe(cleanedSql);
-      await tx.unsafe("SET session_replication_role = 'origin';");
     });
 
     console.log("[DB] Data dump successfully imported!");

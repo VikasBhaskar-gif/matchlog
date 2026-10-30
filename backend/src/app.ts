@@ -4,6 +4,7 @@ import cookie from "@fastify/cookie";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
+import postgres from "postgres";
 import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -109,6 +110,64 @@ export async function buildApp() {
   await app.register(reviewRoutes);
 
   app.get("/api/health", async () => ({ ok: true, env: env.NODE_ENV }));
+
+  app.get("/api/db-diagnostics", async () => {
+    const result: any = {
+      env: env.NODE_ENV,
+      hasDbUrl: !!env.DATABASE_URL,
+      maskedUrl: env.DATABASE_URL ? env.DATABASE_URL.replace(/:[^:@]*@/, ":****@") : null,
+    };
+
+    try {
+      const sslOption =
+        env.NODE_ENV === "production" || env.DATABASE_URL.includes("sslmode=require")
+          ? { rejectUnauthorized: false }
+          : false;
+
+      const rawSql = postgres(env.DATABASE_URL, {
+        max: 1,
+        ssl: sslOption,
+      });
+
+      const tables = await rawSql`
+        SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public'
+      `;
+      result.tables = tables.map((t: any) => t.tablename);
+
+      if (result.tables.includes("users")) {
+        const userCount = await rawSql`SELECT count(*) FROM users`;
+        result.userCount = parseInt(userCount[0].count, 10);
+
+        const vikas = await rawSql`SELECT id, username, supported_team_id FROM users WHERE username = 'VikasBhaskar'`;
+        result.vikas = vikas[0] ?? null;
+      }
+
+      if (result.tables.includes("teams")) {
+        const teamCount = await rawSql`SELECT count(*) FROM teams`;
+        result.teamCount = parseInt(teamCount[0].count, 10);
+      }
+
+      await rawSql.end();
+      result.ok = true;
+    } catch (err: any) {
+      result.ok = false;
+      result.error = err.message;
+      result.code = err.code;
+      result.stack = err.stack;
+    }
+
+    return result;
+  });
+
+  app.post("/api/db-seed", async () => {
+    try {
+      const { ensureDatabaseSeeded } = await import("./db/restore-dump.js");
+      await ensureDatabaseSeeded();
+      return { ok: true, message: "Database check / seed completed successfully." };
+    } catch (err: any) {
+      return { ok: false, error: err.message, stack: err.stack };
+    }
+  });
 
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
