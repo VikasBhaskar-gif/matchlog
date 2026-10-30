@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { NavLink, Outlet, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { LoadingState } from "./States";
@@ -21,6 +21,35 @@ export function AppLayout() {
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
   useScrollRestoration(mainRef);
+
+  const navScrollRef = useRef<HTMLDivElement>(null);
+  const [scrollProgress, setScrollProgress] = useState(0);
+
+  const checkScroll = () => {
+    if (!navScrollRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = navScrollRef.current;
+    const maxScroll = scrollWidth - clientWidth;
+    if (maxScroll > 0) {
+      setScrollProgress(Math.min(1, Math.max(0, scrollLeft / maxScroll)));
+    } else {
+      setScrollProgress(0);
+    }
+  };
+
+  useEffect(() => {
+    checkScroll();
+    window.addEventListener("resize", checkScroll);
+    return () => window.removeEventListener("resize", checkScroll);
+  }, []);
+
+  useEffect(() => {
+    if (!navScrollRef.current) return;
+    checkScroll();
+    const activeEl = navScrollRef.current.querySelector<HTMLElement>(".active-nav-item");
+    if (activeEl) {
+      activeEl.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }
+  }, [location.pathname]);
 
   if (loading) return <LoadingState label="Loading Matchlog..." />;
   if (!user) return <Navigate to="/login" replace />;
@@ -164,32 +193,51 @@ export function AppLayout() {
       </main>
 
       {/* Floating frosted-glass mobile bottom dock (horizontally scrollable for all items) */}
-      <nav className="sm:hidden fixed bottom-3 left-2 right-2 z-50 glass-panel rounded-2xl border border-white/10 shadow-[0_12px_36px_rgba(0,0,0,0.85)] px-1.5 py-1.5 flex items-center overflow-x-auto no-scrollbar scroll-smooth touch-pan-x">
-        <div className="flex items-center gap-1 min-w-max mx-auto px-1">
-          {NAV_ITEMS.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              viewTransition
-              className={({ isActive }) =>
-                `flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-all duration-150 shrink-0 relative ${
-                  isActive
-                    ? "text-emerald-400 scale-105 bg-white/[0.06]"
-                    : "text-slate-400 hover:text-slate-200 active:scale-95"
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <span className="text-base select-none leading-none">{item.icon}</span>
-                  <span className="text-[10px] font-bold tracking-tight whitespace-nowrap">{item.label}</span>
-                  {isActive && (
-                    <span className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-emerald-400 shadow-[0_0_6px_#10b981]" />
-                  )}
-                </>
-              )}
-            </NavLink>
-          ))}
+      <nav className="sm:hidden fixed bottom-3 left-2 right-2 z-50 glass-panel rounded-2xl border border-white/10 shadow-[0_12px_36px_rgba(0,0,0,0.85)] p-1.5 flex flex-col items-center">
+        {/* Horizontally scrollable items list */}
+        <div
+          ref={navScrollRef}
+          onScroll={checkScroll}
+          className="w-full flex items-center overflow-x-auto no-scrollbar scroll-smooth touch-pan-x px-1"
+        >
+          <div className="flex items-center gap-1 min-w-max mx-auto px-1">
+            {NAV_ITEMS.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                viewTransition
+                className={({ isActive }) =>
+                  `flex flex-col items-center gap-0.5 py-1 px-3.5 rounded-xl transition-all duration-150 shrink-0 relative ${
+                    isActive
+                      ? "text-emerald-400 scale-105 bg-white/[0.06] active-nav-item"
+                      : "text-slate-400 hover:text-slate-200 active:scale-95"
+                  }`
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    <span className="text-base select-none leading-none">{item.icon}</span>
+                    <span className="text-[10px] font-bold tracking-tight whitespace-nowrap">{item.label}</span>
+                    {isActive && (
+                      <span className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-emerald-400 shadow-[0_0_6px_#10b981]" />
+                    )}
+                  </>
+                )}
+              </NavLink>
+            ))}
+          </div>
+        </div>
+
+        {/* Scroll indicator bar at bottom so scrollers know they can scroll to see more */}
+        <div className="w-full flex items-center justify-center pt-1 pb-0.5">
+          <div className="w-20 h-1 bg-white/10 rounded-full overflow-hidden relative">
+            <div
+              className="h-full w-8 bg-gradient-to-r from-emerald-400 to-teal-300 rounded-full shadow-[0_0_6px_rgba(16,185,129,0.6)] transition-transform duration-75"
+              style={{
+                transform: `translateX(${scrollProgress * (80 - 32)}px)`,
+              }}
+            />
+          </div>
         </div>
       </nav>
     </div>
