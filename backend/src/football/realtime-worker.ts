@@ -137,17 +137,14 @@ export async function syncLiveMatchScores() {
           break;
       }
 
-      const hasWinner = m.score?.winner !== null && m.score?.winner !== undefined;
-      const hasFullTime = m.score?.fullTime?.home !== null && m.score?.fullTime?.home !== undefined;
-      const isPastExpectedEndTime = Date.now() - new Date(dbMatch.kickoffAt).getTime() > 105 * 60 * 1000;
+      const isPastExpectedEndTime = Date.now() - new Date(dbMatch.kickoffAt).getTime() > 115 * 60 * 1000;
 
-      if (
-        m.status === "FINISHED" ||
-        m.status === "AWARDED" ||
-        (hasWinner && hasFullTime) ||
-        (isPastExpectedEndTime && hasFullTime)
-      ) {
+      if (m.status === "FINISHED" || m.status === "AWARDED") {
         newStatus = "FINISHED";
+      } else if (m.status === "IN_PLAY") {
+        newStatus = isPastExpectedEndTime ? "FINISHED" : "LIVE";
+      } else if (m.status === "PAUSED") {
+        newStatus = isPastExpectedEndTime ? "FINISHED" : "PAUSED";
       }
 
       const homeScore = m.score?.fullTime?.home ?? m.score?.halfTime?.home ?? dbMatch.homeScore;

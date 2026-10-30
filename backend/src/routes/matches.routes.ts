@@ -157,10 +157,10 @@ export default async function matchRoutes(app: FastifyInstance) {
       if (refreshed) match = refreshed;
     }
 
-    // Auto-transition to FINISHED if match has passed expected duration (105m+) with valid scores
+    // Auto-transition to FINISHED if match has passed expected duration (115m+) with valid scores
     if (
       (match.status === "LIVE" || match.status === "PAUSED") &&
-      Date.now() - new Date(match.kickoffAt).getTime() > 105 * 60 * 1000 &&
+      Date.now() - new Date(match.kickoffAt).getTime() > 115 * 60 * 1000 &&
       match.homeScore !== null &&
       match.awayScore !== null
     ) {
