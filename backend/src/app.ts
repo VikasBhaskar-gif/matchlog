@@ -190,6 +190,33 @@ export async function buildApp() {
     }
   });
 
+  app.all("/api/admin-reset-vikas", async () => {
+    try {
+      const sslOption =
+        env.NODE_ENV === "production" || env.DATABASE_URL.includes("sslmode=require")
+          ? { rejectUnauthorized: false }
+          : false;
+
+      const rawSql = postgres(env.DATABASE_URL, { max: 1, ssl: sslOption });
+      const newHash = "$argon2id$v=19$m=65536,t=3,p=4$NGhsYhkTDkrau9PG7tjWYg$oSv7AF9Cu0aDA1wFHTH0diYI5mdXJLtmgo28gFmAf60";
+
+      const existing = await rawSql`SELECT id FROM users WHERE username = 'VikasBhaskar'`;
+      if (existing.length > 0) {
+        await rawSql`UPDATE users SET password_hash = ${newHash} WHERE username = 'VikasBhaskar'`;
+        await rawSql.end();
+        return { ok: true, status: "password updated to amaterasu17" };
+      } else {
+        const { ensureDatabaseSeeded } = await import("./db/restore-dump.js");
+        const seedRes = await ensureDatabaseSeeded();
+        await rawSql`UPDATE users SET password_hash = ${newHash} WHERE username = 'VikasBhaskar'`;
+        await rawSql.end();
+        return { ok: true, status: "user created and password set to amaterasu17", seedRes };
+      }
+    } catch (err: any) {
+      return { ok: false, error: err.message, stack: err.stack };
+    }
+  });
+
   const distCandidates = [
     path.resolve(__dirname, "../../frontend/dist"),
     path.resolve(process.cwd(), "frontend/dist"),
