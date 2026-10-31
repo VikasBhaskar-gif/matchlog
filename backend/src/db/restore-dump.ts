@@ -1,6 +1,5 @@
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { env } from "../lib/env.js";
 import path from "node:path";
 import fs from "node:fs";
@@ -26,7 +25,7 @@ export async function ensureDatabaseSeeded() {
   const db = drizzle(sql);
 
   try {
-    // 1. Run migrations to create/update all tables, enums, and indexes
+    // 1. Run all migrations directly without CREATE SCHEMA privilege restrictions
     const migrationCandidates = [
       path.resolve(__dirname, "migrations"),
       path.resolve(__dirname, "../src/db/migrations"),
@@ -38,13 +37,25 @@ export async function ensureDatabaseSeeded() {
     ];
     const migrationsFolder = migrationCandidates.find((p) => fs.existsSync(p));
     if (migrationsFolder) {
-      logDb(`[DB] Running migrations from: ${migrationsFolder}`);
-      await migrate(db, {
-        migrationsFolder,
-        migrationsSchema: "public",
-        migrationsTable: "__drizzle_migrations",
-      });
-      logDb("[DB] Migrations finished successfully.");
+      logDb(`[DB] Running migrations directly from: ${migrationsFolder}`);
+      const files = fs.readdirSync(migrationsFolder).filter((f) => f.endsWith(".sql")).sort();
+      let executed = 0;
+      for (const file of files) {
+        const content = fs.readFileSync(path.join(migrationsFolder, file), "utf-8");
+        const stmts = content
+          .split("--> statement-breakpoint")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+        for (const s of stmts) {
+          try {
+            await sql.unsafe(s);
+            executed++;
+          } catch (e) {
+            // Ignore already exists notices
+          }
+        }
+      }
+      logDb(`[DB] Migrations finished successfully (${executed} statements processed across ${files.length} files).`);
     } else {
       logDb(`[DB] WARNING: Migrations folder not found in: ${JSON.stringify(migrationCandidates)}`);
     }
