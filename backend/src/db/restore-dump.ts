@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 export async function ensureDatabaseSeeded() {
   const sslOption = getDbSsl(env.DATABASE_URL);
 
-  const sql = postgres(env.DATABASE_URL, { max: 5, ssl: sslOption });
+  const sql = postgres(env.DATABASE_URL, { max: 5, ssl: sslOption, connect_timeout: 10 });
   const db = drizzle(sql);
 
   try {
