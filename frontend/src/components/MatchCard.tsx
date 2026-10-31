@@ -70,7 +70,7 @@ export function MatchCard({
   const homeScorers = isFinished ? formatTeamScorers(match.events, match.homeTeamId) : null;
   const awayScorers = isFinished ? formatTeamScorers(match.events, match.awayTeamId) : null;
 
-  const isLive = match.status === "LIVE";
+  const isLive = match.status === "LIVE" || match.status === "PAUSED";
 
   return (
     <div

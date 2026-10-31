@@ -13,6 +13,7 @@ try {
   ensureDatabaseSeeded()
     .then(async (res) => {
       app.log.info({ res }, "[DB] Database seeding completed successfully");
+      startRealtimeStatusWorker();
       try {
         const { rescoreAllPredictions } = await import("./services/prediction.service.js");
         await rescoreAllPredictions();
@@ -20,10 +21,10 @@ try {
       } catch (err) {
         app.log.error(err, "[DB] Error rescoring predictions");
       }
-      startRealtimeStatusWorker();
     })
     .catch((err) => {
       app.log.error(err, "[DB] Database seeding encountered an error");
+      startRealtimeStatusWorker();
     });
 } catch (err) {
   app.log.error(err);

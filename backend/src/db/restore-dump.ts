@@ -97,8 +97,7 @@ export async function ensureDatabaseSeeded() {
       vikasExists.length > 0 &&
       teamCount > 50 &&
       matchCount > 500 &&
-      playerCount > 1000 &&
-      matchPlayerCount > 5000
+      playerCount > 500
     ) {
       logDb("[DB] Database already contains VikasBhaskar, teams, and matches. Ensuring password is up to date.");
       await queryClient`UPDATE users SET password_hash = ${vikasHash} WHERE username = 'VikasBhaskar'`;

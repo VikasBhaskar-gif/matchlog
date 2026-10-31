@@ -137,13 +137,15 @@ export async function syncLiveMatchScores() {
           break;
       }
 
-      const isPastExpectedEndTime = Date.now() - new Date(dbMatch.kickoffAt).getTime() > 115 * 60 * 1000;
+      const elapsedSinceKickoffMs = Date.now() - new Date(dbMatch.kickoffAt).getTime();
+      const isPastExpectedEndTime = elapsedSinceKickoffMs > 115 * 60 * 1000;
+      const isPossibleHalftimeWindow = elapsedSinceKickoffMs >= 44 * 60 * 1000 && elapsedSinceKickoffMs <= 62 * 60 * 1000;
 
       if (m.status === "FINISHED" || m.status === "AWARDED") {
         newStatus = "FINISHED";
       } else if (m.status === "IN_PLAY") {
-        // If the match is already marked PAUSED (halftime), don't regress to LIVE until 2nd half begins
-        if (dbMatch.status === "PAUSED") {
+        // Only preserve PAUSED if still within the 44m-62m halftime window; once 2nd half starts (>62m), transition to LIVE
+        if (dbMatch.status === "PAUSED" && isPossibleHalftimeWindow) {
           newStatus = "PAUSED";
         } else {
           newStatus = isPastExpectedEndTime ? "FINISHED" : "LIVE";
@@ -197,8 +199,9 @@ export async function syncLiveMatchScores() {
         if (newStatus === "LIVE" || newStatus === "PAUSED") {
           await db.delete(matchEvents).where(eq(matchEvents.matchId, dbMatch.id)).catch(() => {});
           if (!dbMatch.homeFormation) {
-            const { syncEspnLineupForMatch } = await import("./espn-lineup-sync.service.js");
-            await syncEspnLineupForMatch(dbMatch.id).catch(() => {});
+            import("./espn-lineup-sync.service.js")
+              .then(({ syncEspnLineupForMatch }) => syncEspnLineupForMatch(dbMatch.id))
+              .catch(() => {});
           }
         } else if (newStatus === "FINISHED") {
           const { syncEspnGoalsForMatch } = await import("./espn-goal-sync.service.js");
@@ -319,8 +322,9 @@ export async function syncEspnLiveScores(): Promise<number> {
             if (newStatus === "LIVE" || newStatus === "PAUSED") {
               await db.delete(matchEvents).where(eq(matchEvents.matchId, dbMatch.id)).catch(() => {});
               if (!dbMatch.homeFormation) {
-                const { syncEspnLineupForMatch } = await import("./espn-lineup-sync.service.js");
-                await syncEspnLineupForMatch(dbMatch.id).catch(() => {});
+                import("./espn-lineup-sync.service.js")
+                  .then(({ syncEspnLineupForMatch }) => syncEspnLineupForMatch(dbMatch.id))
+                  .catch(() => {});
               }
             } else if (newStatus === "FINISHED") {
               const { syncEspnGoalsForMatch } = await import("./espn-goal-sync.service.js");
@@ -335,8 +339,9 @@ export async function syncEspnLiveScores(): Promise<number> {
             (newStatus === "FINISHED" || newStatus === "LIVE" || newStatus === "PAUSED") &&
             !dbMatch.homeFormation
           ) {
-            const { syncEspnLineupForMatch } = await import("./espn-lineup-sync.service.js");
-            await syncEspnLineupForMatch(dbMatch.id).catch(() => {});
+            import("./espn-lineup-sync.service.js")
+              .then(({ syncEspnLineupForMatch }) => syncEspnLineupForMatch(dbMatch.id))
+              .catch(() => {});
           }
         }
       } catch (leagueErr) {
@@ -350,16 +355,34 @@ export async function syncEspnLiveScores(): Promise<number> {
   return updatedCount;
 }
 
+let lastLiveSyncAt = 0;
+let activeLiveSyncPromise: Promise<void> | null = null;
+
+export async function ensureRecentLiveSync(): Promise<void> {
+  if (Date.now() - lastLiveSyncAt < 15_000) return;
+  if (activeLiveSyncPromise) return activeLiveSyncPromise;
+  activeLiveSyncPromise = (async () => {
+    try {
+      await syncEspnLiveScores();
+      lastLiveSyncAt = Date.now();
+    } finally {
+      activeLiveSyncPromise = null;
+    }
+  })();
+  return activeLiveSyncPromise;
+}
+
 export async function checkRealtimeMatchStatuses() {
   const now = new Date();
   const matchDurationAgo = new Date(Date.now() - 150 * 60 * 1000); // 2.5 hours ago
   const matchOldAgo = new Date(Date.now() - 180 * 60 * 1000); // 3 hours ago
 
-  // 1. Live scorecard sync from ESPN (most accurate real-time scoreboard & halftime tracking)
-  await syncEspnLiveScores().catch((e) => console.error("[realtime-worker] ESPN live score sync failed", e));
-
-  // 2. Secondary live scorecard sync from football-data.org
+  // 1. Secondary live scorecard sync from football-data.org
   await syncLiveMatchScores().catch((e) => console.error("[realtime-worker] Live scorecard sync failed", e));
+
+  // 2. Authoritative live scorecard sync from ESPN (most accurate real-time scoreboard, 2nd half & halftime tracking)
+  await syncEspnLiveScores().catch((e) => console.error("[realtime-worker] ESPN live score sync failed", e));
+  lastLiveSyncAt = Date.now();
 
   // 2. Fallback: Any LIVE matches older than 180 mins should be marked FINISHED if API missed it
   const newlyFinished = await db

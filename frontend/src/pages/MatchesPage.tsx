@@ -219,8 +219,8 @@ export function MatchesPage() {
       : undefined
   );
 
-  const liveChecker = useMatches({ status: "LIVE", limit: "10" });
-  const liveCount = liveChecker.data?.matches?.length ?? 0;
+  const liveChecker = useMatches({ status: "LIVE", limit: "50" });
+  const liveCount = liveChecker.data?.total ?? liveChecker.data?.matches?.length ?? 0;
 
   const isAllMode = status === "ALL";
 

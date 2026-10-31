@@ -36,11 +36,19 @@ export default async function matchRoutes(app: FastifyInstance) {
         conditions.push(inArray(matches.competitionId, supported.map((c) => c.id)));
       }
     }
+    // If user is querying LIVE matches, ensure live scores were synced within the last 15s
+    if (q.status === "LIVE") {
+      const { ensureRecentLiveSync } = await import("../football/realtime-worker.js");
+      await ensureRecentLiveSync().catch(() => {});
+    }
+
     if (q.season) conditions.push(eq(matches.seasonId, q.season));
     if (q.competition) conditions.push(eq(matches.competitionId, q.competition));
     if (q.round) conditions.push(eq(matches.round, q.round));
     if (q.status === "SCHEDULED" && !q.timeline) {
       conditions.push(and(eq(matches.status, "SCHEDULED"), gte(matches.kickoffAt, new Date(Date.now() - 3.5 * 60 * 60 * 1000))));
+    } else if (q.status === "LIVE") {
+      conditions.push(inArray(matches.status, ["LIVE", "PAUSED"]));
     } else if (q.status && q.status !== "ALL") {
       conditions.push(eq(matches.status, q.status as any));
     }
@@ -153,8 +161,9 @@ export default async function matchRoutes(app: FastifyInstance) {
     const isStale = !match.lastSyncedAt || Date.now() - new Date(match.lastSyncedAt).getTime() > 12_000;
 
     if (isLiveWindow && isStale) {
-      const { syncLiveMatchScores } = await import("../football/realtime-worker.js");
+      const { syncLiveMatchScores, syncEspnLiveScores } = await import("../football/realtime-worker.js");
       await syncLiveMatchScores().catch(() => {});
+      await syncEspnLiveScores().catch(() => {});
       const refreshed = await db.query.matches.findFirst({ where: eq(matches.id, request.params.id) });
       if (refreshed) match = refreshed;
     }
@@ -258,9 +267,10 @@ export default async function matchRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/matches/sync-live", async () => {
-    const { syncLiveMatchScores } = await import("../football/realtime-worker.js");
+    const { syncLiveMatchScores, syncEspnLiveScores } = await import("../football/realtime-worker.js");
     const result = await syncLiveMatchScores();
-    return result;
+    const espnUpdated = await syncEspnLiveScores();
+    return { ...result, espnUpdated };
   });
 }
 
