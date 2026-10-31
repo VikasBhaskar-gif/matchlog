@@ -134,7 +134,7 @@ export function FriendProfilePage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             {/* PFP Avatar */}
-            <div className="h-16 w-16 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-2xl font-black text-black shadow-lg shadow-emerald-500/20 shrink-0 overflow-hidden border border-white/10">
+            <div className="h-16 w-16 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-2xl font-black text-black shadow-lg shadow-emerald-500/20 shrink-0 overflow-hidden border-2 border-emerald-400/50">
               {p.avatar ? (
                 <img src={p.avatar} alt={p.username} className="w-full h-full object-cover" />
               ) : (

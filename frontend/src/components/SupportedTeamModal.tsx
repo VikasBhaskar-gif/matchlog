@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { useCompetitions, useTeams } from "../hooks/queries";
 import { LEAGUE_LOGOS } from "../lib/competitions";
 import { getClubStyle } from "../lib/clubColors";
-import { processImageFile } from "../lib/imageUpload";
+import { ImageCropModal } from "./ImageCropModal";
 import type { Competition, Team } from "../api/types";
 
 interface SupportedTeamModalProps {
@@ -33,7 +33,8 @@ export function SupportedTeamModal({
   const [selection, setSelection] = useState<SelectionValue>(null);
   const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null);
   const [avatar, setAvatar] = useState("");
-  const [processingAvatar, setProcessingAvatar] = useState(false);
+  const [cropImageSrc, setCropImageSrc] = useState<string>("");
+  const [isCropOpen, setIsCropOpen] = useState(false);
   const modalFileInputRef = useRef<HTMLInputElement>(null);
   const [searchFilter, setSearchFilter] = useState("");
   const [saving, setSaving] = useState(false);
@@ -416,19 +417,20 @@ export function SupportedTeamModal({
               ref={modalFileInputRef}
               type="file"
               accept="image/png,image/jpeg,image/webp,image/gif"
-              onChange={async (e) => {
+              onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
-                setProcessingAvatar(true);
-                try {
-                  const dataUrl = await processImageFile(file, 256);
-                  setAvatar(dataUrl);
-                } catch (err: any) {
-                  setError(err?.message || "Failed to load image from PC.");
-                } finally {
-                  setProcessingAvatar(false);
-                  if (modalFileInputRef.current) modalFileInputRef.current.value = "";
+                if (!file.type.startsWith("image/")) {
+                  setError("Please select an image file (PNG, JPG, WebP).");
+                  return;
                 }
+                const reader = new FileReader();
+                reader.onload = () => {
+                  setCropImageSrc(reader.result as string);
+                  setIsCropOpen(true);
+                };
+                reader.readAsDataURL(file);
+                if (modalFileInputRef.current) modalFileInputRef.current.value = "";
               }}
               className="hidden"
             />
@@ -438,7 +440,7 @@ export function SupportedTeamModal({
                 type="button"
                 onClick={() => modalFileInputRef.current?.click()}
                 title="Click to choose image from PC"
-                className="w-12 h-12 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center font-black text-base text-black shrink-0 overflow-hidden border border-white/10 relative group hover:scale-105 transition-transform"
+                className="w-12 h-12 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center font-black text-base text-black shrink-0 overflow-hidden border-2 border-emerald-400/50 relative group hover:scale-105 transition-transform"
               >
                 {avatar.trim() ? (
                   <img
@@ -461,11 +463,10 @@ export function SupportedTeamModal({
                 <button
                   type="button"
                   onClick={() => modalFileInputRef.current?.click()}
-                  disabled={processingAvatar}
                   className="px-3.5 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-xs font-bold text-slate-200 hover:text-white transition-all flex items-center gap-1.5 shrink-0"
                 >
                   <span>📁</span>
-                  <span>{processingAvatar ? "Loading..." : "Choose from PC"}</span>
+                  <span>Choose from PC</span>
                 </button>
                 <span className="text-[11px] text-slate-500">or</span>
                 <input
@@ -528,6 +529,20 @@ export function SupportedTeamModal({
           </button>
         </div>
       </div>
+
+      <ImageCropModal
+        isOpen={isCropOpen}
+        imageSrc={cropImageSrc}
+        onClose={() => {
+          setIsCropOpen(false);
+          setCropImageSrc("");
+        }}
+        onCropComplete={(croppedDataUrl) => {
+          setAvatar(croppedDataUrl);
+          setIsCropOpen(false);
+          setCropImageSrc("");
+        }}
+      />
     </div>,
     document.body
   );

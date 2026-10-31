@@ -110,8 +110,12 @@ function UserSearch() {
 
 function UserAvatar({ user }: { user: FriendUser }) {
   return (
-    <div className="h-9 w-9 rounded-full bg-[var(--color-surface-2)] flex items-center justify-center text-xs font-bold">
-      {user.username[0]?.toUpperCase()}
+    <div className="h-9 w-9 rounded-full bg-[var(--color-surface-2)] overflow-hidden flex items-center justify-center text-xs font-bold border border-white/10 shrink-0">
+      {user.avatar ? (
+        <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
+      ) : (
+        user.username[0]?.toUpperCase()
+      )}
     </div>
   );
 }

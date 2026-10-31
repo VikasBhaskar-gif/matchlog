@@ -7,13 +7,15 @@ import { getClubStyle } from "../lib/clubColors";
 import { LEAGUE_LOGOS, sortCompetitions } from "../lib/competitions";
 import { playerInitials } from "../lib/format";
 import { SupportedTeamModal } from "../components/SupportedTeamModal";
-import { processImageFile } from "../lib/imageUpload";
+import { ImageCropModal } from "../components/ImageCropModal";
 
 export function ProfilePage() {
   const { user, logout, updateProfile } = useAuth();
   const navigate = useNavigate();
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [cropImageSrc, setCropImageSrc] = useState<string>("");
+  const [isCropOpen, setIsCropOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const stats = useStats("all-time");
@@ -30,18 +32,32 @@ export function ProfilePage() {
     navigate("/login");
   }
 
-  async function handleAvatarFile(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleAvatarFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image file (PNG, JPG, WebP).");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropImageSrc(reader.result as string);
+      setIsCropOpen(true);
+    };
+    reader.readAsDataURL(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function handleCropComplete(croppedDataUrl: string) {
+    setIsCropOpen(false);
+    setCropImageSrc("");
     setUploadingAvatar(true);
     try {
-      const dataUrl = await processImageFile(file, 256);
-      await updateProfile({ avatar: dataUrl });
+      await updateProfile({ avatar: croppedDataUrl });
     } catch (err: any) {
       alert(err?.message || "Failed to upload image.");
     } finally {
       setUploadingAvatar(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
@@ -74,7 +90,7 @@ export function ProfilePage() {
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadingAvatar}
               title="Click to upload profile picture from PC"
-              className="h-16 w-16 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-2xl font-black text-black shadow-lg shadow-emerald-500/20 shrink-0 overflow-hidden relative border border-white/10 group cursor-pointer hover:scale-105 active:scale-95 transition-all"
+              className="h-16 w-16 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-2xl font-black text-black shadow-lg shadow-emerald-500/20 shrink-0 overflow-hidden relative border-2 border-emerald-400/50 group cursor-pointer hover:scale-105 active:scale-95 transition-all"
             >
               {user.avatar ? (
                 <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
@@ -186,6 +202,13 @@ export function ProfilePage() {
       <SupportedTeamModal
         isOpen={isEditOpen}
         onClose={() => setIsEditOpen(false)}
+      />
+
+      <ImageCropModal
+        isOpen={isCropOpen}
+        imageSrc={cropImageSrc}
+        onClose={() => setIsCropOpen(false)}
+        onCropComplete={handleCropComplete}
       />
 
       {stats.isLoading && <LoadingState label="Loading profile..." />}
