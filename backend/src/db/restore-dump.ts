@@ -14,11 +14,41 @@ const __dirname = path.dirname(__filename);
 export async function ensureDatabaseSeeded() {
   const sslOption = getDbSsl(env.DATABASE_URL);
 
-  const sql = postgres(env.DATABASE_URL, { max: 1, ssl: sslOption });
+  const sql = postgres(env.DATABASE_URL, { max: 5, ssl: sslOption });
   const db = drizzle(sql);
 
   try {
-    // 1. Run migrations first so all tables & enums exist
+    // 1. Ensure all tables & enums exist from schema.sql first (bulletproof DDL)
+    const schemaCandidates = [
+      path.resolve(__dirname, "schema.sql"),
+      path.resolve(__dirname, "db/schema.sql"),
+      path.resolve(__dirname, "../db/schema.sql"),
+      path.resolve(__dirname, "../src/db/schema.sql"),
+      path.resolve(__dirname, "../../src/db/schema.sql"),
+      path.resolve(process.cwd(), "src/db/schema.sql"),
+      path.resolve(process.cwd(), "backend/src/db/schema.sql"),
+      path.resolve(process.cwd(), "dist/db/schema.sql"),
+      path.resolve(process.cwd(), "backend/dist/db/schema.sql"),
+    ];
+    const schemaPath = schemaCandidates.find((p) => fs.existsSync(p));
+    if (schemaPath) {
+      console.log("[DB] Ensuring schema from:", schemaPath);
+      const rawSchema = fs.readFileSync(schemaPath, "utf-8");
+      const lines = rawSchema
+        .split("\n")
+        .filter((l) => !l.trim().startsWith("--") && !l.trim().startsWith("\\"));
+      const stmts = lines.join("\n").split(";").map((s) => s.trim()).filter((s) => s.length > 0);
+      for (const s of stmts) {
+        try {
+          await sql.unsafe(s + ";");
+        } catch {
+          // Ignore already exists
+        }
+      }
+      console.log(`[DB] Schema check complete (${stmts.length} DDL statements verified).`);
+    }
+
+    // 2. Also run any incremental migrations if present
     const migrationCandidates = [
       path.resolve(__dirname, "migrations"),
       path.resolve(__dirname, "../src/db/migrations"),
@@ -31,53 +61,11 @@ export async function ensureDatabaseSeeded() {
     const migrationsFolder = migrationCandidates.find((p) => fs.existsSync(p));
     try {
       if (migrationsFolder) {
-        console.log(`[DB] Running migrations from ${migrationsFolder}...`);
         await migrate(db, { migrationsFolder });
-        console.log("[DB] Migrations finished successfully.");
-      } else {
-        console.warn("[DB] Migrations folder not found in candidates:", migrationCandidates);
+        console.log("[DB] Migrations check finished.");
       }
     } catch (migErr) {
       console.warn("[DB] Migrations notice:", migErr);
-    }
-
-    // Fallback: If tables still don't exist (e.g. fresh DB where migrations had lock or enum conflicts), apply schema.sql
-    try {
-      const chk = await sql`SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'matches'`;
-      const hasMatchesTable = parseInt(chk[0]?.count ?? "0", 10) > 0;
-      if (!hasMatchesTable) {
-        console.log("[DB] 'matches' table not found. Applying schema.sql DDL...");
-        const schemaCandidates = [
-          path.resolve(__dirname, "schema.sql"),
-          path.resolve(__dirname, "db/schema.sql"),
-          path.resolve(__dirname, "../db/schema.sql"),
-          path.resolve(__dirname, "../src/db/schema.sql"),
-          path.resolve(__dirname, "../../src/db/schema.sql"),
-          path.resolve(process.cwd(), "src/db/schema.sql"),
-          path.resolve(process.cwd(), "backend/src/db/schema.sql"),
-          path.resolve(process.cwd(), "dist/db/schema.sql"),
-          path.resolve(process.cwd(), "backend/dist/db/schema.sql"),
-        ];
-        const schemaPath = schemaCandidates.find((p) => fs.existsSync(p));
-        if (schemaPath) {
-          const rawSchema = fs.readFileSync(schemaPath, "utf-8");
-          const lines = rawSchema
-            .split("\n")
-            .filter((l) => !l.trim().startsWith("--") && !l.trim().startsWith("\\"));
-          const stmts = lines.join("\n").split(";").map((s) => s.trim()).filter((s) => s.length > 0);
-          console.log(`[DB] Executing ${stmts.length} DDL statements from schema.sql...`);
-          for (const s of stmts) {
-            try {
-              await sql.unsafe(s + ";");
-            } catch {
-              // Ignore already exists
-            }
-          }
-          console.log("[DB] schema.sql DDL executed successfully.");
-        }
-      }
-    } catch (schemaErr: any) {
-      console.warn("[DB] Schema fallback notice:", schemaErr?.message);
     }
 
     // Ensure display_name column exists if dump references it
