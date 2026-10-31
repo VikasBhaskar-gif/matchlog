@@ -1,4 +1,8 @@
-CREATE TYPE "public"."sync_status" AS ENUM('SUCCESS', 'FAILURE', 'PARTIAL');--> statement-breakpoint
+DO $$ BEGIN
+ CREATE TYPE "public"."sync_status" AS ENUM('SUCCESS', 'FAILURE', 'PARTIAL');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "sync_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"job_name" text NOT NULL,

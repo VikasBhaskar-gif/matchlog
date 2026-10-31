@@ -1,1 +1,1 @@
-ALTER TABLE "matches" ADD COLUMN "kickoff_time_confirmed" boolean DEFAULT true NOT NULL;
+ALTER TABLE "matches" ADD COLUMN IF NOT EXISTS "kickoff_time_confirmed" boolean DEFAULT true NOT NULL;

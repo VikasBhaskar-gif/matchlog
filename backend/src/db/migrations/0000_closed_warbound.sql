@@ -1,9 +1,33 @@
-CREATE TYPE "public"."match_event_type" AS ENUM('GOAL', 'OWN_GOAL', 'PENALTY_GOAL', 'RED_CARD', 'YELLOW_CARD', 'SUBSTITUTION');--> statement-breakpoint
-CREATE TYPE "public"."match_status" AS ENUM('SCHEDULED', 'LIVE', 'FINISHED', 'POSTPONED', 'CANCELLED');--> statement-breakpoint
-CREATE TYPE "public"."knockout_advance" AS ENUM('HOME', 'AWAY');--> statement-breakpoint
-CREATE TYPE "public"."predicted_outcome" AS ENUM('HOME', 'DRAW', 'AWAY');--> statement-breakpoint
-CREATE TYPE "public"."watch_type" AS ENUM('FULL_MATCH', 'FIRST_HALF', 'SECOND_HALF', 'CUSTOM');--> statement-breakpoint
-CREATE TYPE "public"."xp_source_type" AS ENUM('MATCH_WATCH', 'WATCH_ADJUSTMENT', 'STREAK_BONUS', 'ACHIEVEMENT', 'FIRST_FOLLOWED_TEAM_MATCH', 'FIRST_FOLLOWED_COMPETITION_MATCH', 'OTHER');--> statement-breakpoint
+DO $$ BEGIN
+ CREATE TYPE "public"."match_event_type" AS ENUM('GOAL', 'OWN_GOAL', 'PENALTY_GOAL', 'RED_CARD', 'YELLOW_CARD', 'SUBSTITUTION');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+ CREATE TYPE "public"."match_status" AS ENUM('SCHEDULED', 'LIVE', 'FINISHED', 'POSTPONED', 'CANCELLED');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+ CREATE TYPE "public"."knockout_advance" AS ENUM('HOME', 'AWAY');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+ CREATE TYPE "public"."predicted_outcome" AS ENUM('HOME', 'DRAW', 'AWAY');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+ CREATE TYPE "public"."watch_type" AS ENUM('FULL_MATCH', 'FIRST_HALF', 'SECOND_HALF', 'CUSTOM');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+ CREATE TYPE "public"."xp_source_type" AS ENUM('MATCH_WATCH', 'WATCH_ADJUSTMENT', 'STREAK_BONUS', 'ACHIEVEMENT', 'FIRST_FOLLOWED_TEAM_MATCH', 'FIRST_FOLLOWED_COMPETITION_MATCH', 'OTHER');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "sessions" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" uuid NOT NULL,

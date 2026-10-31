@@ -39,7 +39,11 @@ export async function ensureDatabaseSeeded() {
     const migrationsFolder = migrationCandidates.find((p) => fs.existsSync(p));
     if (migrationsFolder) {
       logDb(`[DB] Running migrations from: ${migrationsFolder}`);
-      await migrate(db, { migrationsFolder });
+      await migrate(db, {
+        migrationsFolder,
+        migrationsSchema: "public",
+        migrationsTable: "__drizzle_migrations",
+      });
       logDb("[DB] Migrations finished successfully.");
     } else {
       logDb(`[DB] WARNING: Migrations folder not found in: ${JSON.stringify(migrationCandidates)}`);

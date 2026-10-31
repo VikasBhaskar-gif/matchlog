@@ -1,2 +1,2 @@
-ALTER TABLE "players" ADD COLUMN "source" "match_source" DEFAULT 'OPENFOOTBALL' NOT NULL;--> statement-breakpoint
-ALTER TABLE "teams" ADD COLUMN "source" "match_source" DEFAULT 'OPENFOOTBALL' NOT NULL;
+ALTER TABLE "players" ADD COLUMN IF NOT EXISTS "source" "match_source" DEFAULT 'OPENFOOTBALL' NOT NULL;--> statement-breakpoint
+ALTER TABLE "teams" ADD COLUMN IF NOT EXISTS "source" "match_source" DEFAULT 'OPENFOOTBALL' NOT NULL;

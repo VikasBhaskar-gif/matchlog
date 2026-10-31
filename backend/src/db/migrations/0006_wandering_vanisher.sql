@@ -1,5 +1,13 @@
-CREATE TYPE "public"."friend_activity_type" AS ENUM('WATCHED_MATCH', 'MADE_PREDICTION', 'UNLOCKED_ACHIEVEMENT', 'REACHED_LEVEL');--> statement-breakpoint
-CREATE TYPE "public"."friend_request_status" AS ENUM('PENDING', 'ACCEPTED', 'DECLINED', 'CANCELLED');--> statement-breakpoint
+DO $$ BEGIN
+ CREATE TYPE "public"."friend_activity_type" AS ENUM('WATCHED_MATCH', 'MADE_PREDICTION', 'UNLOCKED_ACHIEVEMENT', 'REACHED_LEVEL');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+ CREATE TYPE "public"."friend_request_status" AS ENUM('PENDING', 'ACCEPTED', 'DECLINED', 'CANCELLED');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "friend_activities" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
