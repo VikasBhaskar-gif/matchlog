@@ -185,17 +185,56 @@ export default async function matchRoutes(app: FastifyInstance) {
       enriched.events = await getOrGenerateMatchEvents(match.id);
     }
 
-    const lineup = await db
+    let lineup = await db
       .select({
         playerId: matchPlayers.playerId,
         name: players.name,
         teamId: matchPlayers.teamId,
         isStarter: matchPlayers.isStarter,
         goals: matchPlayers.goals,
+        tacticalPosition: matchPlayers.tacticalPosition,
+        formationPlace: matchPlayers.formationPlace,
+        minutesPlayed: matchPlayers.minutesPlayed,
+        subInMinute: matchPlayers.subInMinute,
       })
       .from(matchPlayers)
       .innerJoin(players, eq(players.id, matchPlayers.playerId))
       .where(eq(matchPlayers.matchId, match.id));
+
+    if (
+      (match.status === "FINISHED" || match.status === "LIVE" || match.status === "PAUSED") &&
+      (lineup.length < 22 || !match.homeFormation)
+    ) {
+      try {
+        const { syncEspnLineupForMatch } = await import("../football/espn-lineup-sync.service.js");
+        const synced = await syncEspnLineupForMatch(match.id);
+        if (synced) {
+          lineup = await db
+            .select({
+              playerId: matchPlayers.playerId,
+              name: players.name,
+              teamId: matchPlayers.teamId,
+              isStarter: matchPlayers.isStarter,
+              goals: matchPlayers.goals,
+              tacticalPosition: matchPlayers.tacticalPosition,
+              formationPlace: matchPlayers.formationPlace,
+              minutesPlayed: matchPlayers.minutesPlayed,
+              subInMinute: matchPlayers.subInMinute,
+            })
+            .from(matchPlayers)
+            .innerJoin(players, eq(players.id, matchPlayers.playerId))
+            .where(eq(matchPlayers.matchId, match.id));
+
+          const refreshedMatch = await db.query.matches.findFirst({ where: eq(matches.id, match.id) });
+          if (refreshedMatch) {
+            enriched.homeFormation = refreshedMatch.homeFormation;
+            enriched.awayFormation = refreshedMatch.awayFormation;
+          }
+        }
+      } catch (e) {
+        console.error("[matches] On-demand syncEspnLineupForMatch error:", e);
+      }
+    }
 
     let communityPotm: { playerId: string; name: string; votes: number }[] = [];
     if (match.status === "FINISHED") {

@@ -251,8 +251,8 @@ export default async function potmRoutes(app: FastifyInstance) {
     let awayCandidates: CandidatePlayer[] = [];
 
     if (teamIds.length > 0) {
-      // If match is finished and no match_players exist (or lack tactical positions), try on-demand ESPN sync
-      if (match?.status === "FINISHED") {
+      // If match is finished/live/paused and lineups or tactical positions are missing, run on-demand ESPN sync
+      if (match?.status === "FINISHED" || match?.status === "LIVE" || match?.status === "PAUSED") {
         const existingStats = await db
           .select({
             count: sql<number>`count(*)`,
@@ -264,11 +264,11 @@ export default async function potmRoutes(app: FastifyInstance) {
         const total = Number(existingStats[0]?.count ?? 0);
         const withTactical = Number(existingStats[0]?.hasTactical ?? 0);
 
-        if (total === 0 || withTactical === 0) {
+        if (total < 22 || withTactical === 0 || !match?.homeFormation) {
           try {
             await syncEspnLineupForMatch(matchId);
           } catch (e) {
-            // on-demand sync failure is non-fatal
+            console.error("[potm] On-demand syncEspnLineupForMatch error:", e);
           }
         }
       }

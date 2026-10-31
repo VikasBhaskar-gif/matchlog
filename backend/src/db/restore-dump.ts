@@ -68,24 +68,38 @@ export async function ensureDatabaseSeeded() {
       await queryClient.unsafe(`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "display_name" text;`);
     } catch {}
 
-    // 2. Check if VikasBhaskar, teams, and matches already exist
+    // 2. Check if VikasBhaskar, teams, matches, players, and match_players already exist
     let vikasExists: any[] = [];
     let teamCount = 0;
     let matchCount = 0;
+    let playerCount = 0;
+    let matchPlayerCount = 0;
     try {
       vikasExists = await queryClient`SELECT id FROM users WHERE username = 'VikasBhaskar'`;
       const teamsExist = await queryClient`SELECT count(*) FROM teams`;
       teamCount = parseInt(teamsExist[0]?.count ?? "0", 10);
       const matchesExist = await queryClient`SELECT count(*) FROM matches`;
       matchCount = parseInt(matchesExist[0]?.count ?? "0", 10);
-      logDb(`[DB] Counts: vikas=${vikasExists.length}, teams=${teamCount}, matches=${matchCount}`);
+      const playersExist = await queryClient`SELECT count(*) FROM players`;
+      playerCount = parseInt(playersExist[0]?.count ?? "0", 10);
+      const matchPlayersExist = await queryClient`SELECT count(*) FROM match_players`;
+      matchPlayerCount = parseInt(matchPlayersExist[0]?.count ?? "0", 10);
+      logDb(
+        `[DB] Counts: vikas=${vikasExists.length}, teams=${teamCount}, matches=${matchCount}, players=${playerCount}, match_players=${matchPlayerCount}`
+      );
     } catch (checkErr: any) {
       logDb(`[DB] Tables check notice: ${checkErr?.message}`);
     }
 
     const vikasHash = "$argon2id$v=19$m=65536,t=3,p=4$NGhsYhkTDkrau9PG7tjWYg$oSv7AF9Cu0aDA1wFHTH0diYI5mdXJLtmgo28gFmAf60";
 
-    if (vikasExists.length > 0 && teamCount > 50 && matchCount > 500) {
+    if (
+      vikasExists.length > 0 &&
+      teamCount > 50 &&
+      matchCount > 500 &&
+      playerCount > 1000 &&
+      matchPlayerCount > 5000
+    ) {
       logDb("[DB] Database already contains VikasBhaskar, teams, and matches. Ensuring password is up to date.");
       await queryClient`UPDATE users SET password_hash = ${vikasHash} WHERE username = 'VikasBhaskar'`;
       try {
@@ -176,15 +190,26 @@ export async function ensureDatabaseSeeded() {
     for (const table of TABLE_INSERT_ORDER) {
       const stmts = stmtsByTable.get(table) || [];
       if (stmts.length === 0) continue;
+      if (table === "public.teams" && teamCount >= stmts.length) continue;
+      if (table === "public.matches" && matchCount >= stmts.length) continue;
+      if (table === "public.players" && playerCount >= stmts.length) continue;
+      if (table === "public.match_players" && matchPlayerCount >= stmts.length) continue;
+
       logDb(`[DB] Seeding ${table} (${stmts.length} rows)...`);
-      try {
-        for (let i = 0; i < stmts.length; i += batchSize) {
-          const batch = stmts.slice(i, i + batchSize).join("\n");
+      for (let i = 0; i < stmts.length; i += batchSize) {
+        const slice = stmts.slice(i, i + batchSize);
+        const batch = slice.join("\n");
+        try {
           await queryClient.unsafe(batch);
+          totalImported += slice.length;
+        } catch (batchErr: any) {
+          for (const singleStmt of slice) {
+            try {
+              await queryClient.unsafe(singleStmt);
+              totalImported += 1;
+            } catch {}
+          }
         }
-        totalImported += stmts.length;
-      } catch (tableErr: any) {
-        logDb(`[DB] Error seeding ${table}: ${tableErr?.message}`);
       }
     }
 

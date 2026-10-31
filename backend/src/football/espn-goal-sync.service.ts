@@ -216,6 +216,14 @@ export async function processEspnEventsList(
             source: "FOOTBALL_DATA_ORG",
             updatedAt: new Date(),
           })
+          .onConflictDoUpdate({
+            target: players.externalId,
+            set: {
+              name: athleteName,
+              currentTeamId: playerTeamDbId,
+              updatedAt: new Date(),
+            },
+          })
           .returning();
         player = inserted;
       }

@@ -1,5 +1,5 @@
 import { db } from "../db/client.js";
-import { matches, teams, matchEvents } from "../db/schema/index.js";
+import { matches, teams, matchEvents, matchPlayers } from "../db/schema/index.js";
 import { and, eq, lt, lte, gte, or, ilike, inArray, sql } from "drizzle-orm";
 import { processFinishedMatchPredictions } from "../sync/process-predictions.js";
 import { env } from "../lib/env.js";
@@ -196,9 +196,15 @@ export async function syncLiveMatchScores() {
 
         if (newStatus === "LIVE" || newStatus === "PAUSED") {
           await db.delete(matchEvents).where(eq(matchEvents.matchId, dbMatch.id)).catch(() => {});
+          if (!dbMatch.homeFormation) {
+            const { syncEspnLineupForMatch } = await import("./espn-lineup-sync.service.js");
+            await syncEspnLineupForMatch(dbMatch.id).catch(() => {});
+          }
         } else if (newStatus === "FINISHED") {
           const { syncEspnGoalsForMatch } = await import("./espn-goal-sync.service.js");
+          const { syncEspnLineupForMatch } = await import("./espn-lineup-sync.service.js");
           await syncEspnGoalsForMatch(dbMatch.id).catch(() => {});
+          await syncEspnLineupForMatch(dbMatch.id).catch(() => {});
         }
 
         updatedCount++;
@@ -312,13 +318,25 @@ export async function syncEspnLiveScores(): Promise<number> {
 
             if (newStatus === "LIVE" || newStatus === "PAUSED") {
               await db.delete(matchEvents).where(eq(matchEvents.matchId, dbMatch.id)).catch(() => {});
+              if (!dbMatch.homeFormation) {
+                const { syncEspnLineupForMatch } = await import("./espn-lineup-sync.service.js");
+                await syncEspnLineupForMatch(dbMatch.id).catch(() => {});
+              }
             } else if (newStatus === "FINISHED") {
               const { syncEspnGoalsForMatch } = await import("./espn-goal-sync.service.js");
+              const { syncEspnLineupForMatch } = await import("./espn-lineup-sync.service.js");
               await syncEspnGoalsForMatch(dbMatch.id).catch(() => {});
+              await syncEspnLineupForMatch(dbMatch.id).catch(() => {});
             }
 
             updatedCount++;
             console.log(`[realtime-worker][ESPN] Updated ${homeDbTeam.name} vs ${awayDbTeam.name}: ${newStatus} (${homeScore}-${awayScore})`);
+          } else if (
+            (newStatus === "FINISHED" || newStatus === "LIVE" || newStatus === "PAUSED") &&
+            !dbMatch.homeFormation
+          ) {
+            const { syncEspnLineupForMatch } = await import("./espn-lineup-sync.service.js");
+            await syncEspnLineupForMatch(dbMatch.id).catch(() => {});
           }
         }
       } catch (leagueErr) {
@@ -410,6 +428,47 @@ export async function checkRealtimeMatchStatuses() {
     }
   } catch (err) {
     console.error("[realtime-worker] Error syncing missing events for recent matches:", err);
+  }
+
+  // 5. Ensure recently finished or live matches have official ESPN lineups and substitutes
+  try {
+    const recentMatches = await db
+      .select({ id: matches.id, homeFormation: matches.homeFormation })
+      .from(matches)
+      .where(
+        and(
+          inArray(matches.status, ["FINISHED", "LIVE", "PAUSED"]),
+          gte(matches.kickoffAt, new Date(Date.now() - 72 * 60 * 60 * 1000))
+        )
+      );
+
+    if (recentMatches.length > 0) {
+      const candidateIds = recentMatches.map((m) => m.id);
+      const existingLineups = await db
+        .select({
+          matchId: matchPlayers.matchId,
+          count: sql<number>`count(*)`,
+        })
+        .from(matchPlayers)
+        .where(inArray(matchPlayers.matchId, candidateIds))
+        .groupBy(matchPlayers.matchId);
+
+      const countByMatch = new Map(existingLineups.map((r) => [r.matchId, Number(r.count)]));
+      const missingLineups = recentMatches
+        .filter((m) => (countByMatch.get(m.id) ?? 0) < 22 || !m.homeFormation)
+        .map((m) => m.id);
+
+      if (missingLineups.length > 0) {
+        const { syncEspnLineupForMatch } = await import("./espn-lineup-sync.service.js");
+        for (const id of missingLineups.slice(0, 5)) {
+          await syncEspnLineupForMatch(id).catch((e) =>
+            console.error(`[realtime-worker] Lineup sync failed for ${id}:`, e)
+          );
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[realtime-worker] Error syncing missing lineups for recent matches:", err);
   }
 }
 
