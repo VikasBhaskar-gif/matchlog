@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 
 interface ImageCropModalProps {
   isOpen: boolean;
@@ -20,9 +21,20 @@ export function ImageCropModal({
   const imageRef = useRef<HTMLImageElement | null>(null);
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
 
-  // Viewport and circular crop diameter
-  const VIEWPORT_SIZE = 300;
-  const CROP_DIAMETER = 240;
+  // Viewport and circular crop diameter (compact so it fits on any screen without scrolling)
+  const VIEWPORT_SIZE = 240;
+  const CROP_DIAMETER = 200;
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
 
   // Reset state when a new image is loaded
   useEffect(() => {
@@ -39,9 +51,10 @@ export function ImageCropModal({
   }, [isOpen, imageSrc]);
 
   // Calculate base scale so image fully covers the crop circle at zoom = 1
-  const baseScale = naturalSize.width && naturalSize.height
-    ? Math.max(CROP_DIAMETER / naturalSize.width, CROP_DIAMETER / naturalSize.height)
-    : 1;
+  const baseScale =
+    naturalSize.width && naturalSize.height
+      ? Math.max(CROP_DIAMETER / naturalSize.width, CROP_DIAMETER / naturalSize.height)
+      : 1;
 
   const currentScale = baseScale * zoom;
   const renderedWidth = naturalSize.width * currentScale;
@@ -51,12 +64,15 @@ export function ImageCropModal({
   const maxPanX = Math.max(0, (renderedWidth - CROP_DIAMETER) / 2);
   const maxPanY = Math.max(0, (renderedHeight - CROP_DIAMETER) / 2);
 
-  const clampPan = useCallback((x: number, y: number) => {
-    return {
-      x: Math.min(maxPanX, Math.max(-maxPanX, x)),
-      y: Math.min(maxPanY, Math.max(-maxPanY, y)),
-    };
-  }, [maxPanX, maxPanY]);
+  const clampPan = useCallback(
+    (x: number, y: number) => {
+      return {
+        x: Math.min(maxPanX, Math.max(-maxPanX, x)),
+        y: Math.min(maxPanY, Math.max(-maxPanY, y)),
+      };
+    },
+    [maxPanX, maxPanY]
+  );
 
   // Keep pan within bounds when zooming out
   useEffect(() => {
@@ -104,10 +120,6 @@ export function ImageCropModal({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Center of crop circle relative to image center
-    // Image center in rendered pixels is (renderedWidth / 2 + pan.x, renderedHeight / 2 + pan.y)
-    // Crop center in rendered pixels is (renderedWidth / 2, renderedHeight / 2)
-    // So the crop center offset in image coordinate space:
     const cropSizeInImage = CROP_DIAMETER / currentScale;
     const cropCenterXInImage = naturalSize.width / 2 - pan.x / currentScale;
     const cropCenterYInImage = naturalSize.height / 2 - pan.y / currentScale;
@@ -133,14 +145,14 @@ export function ImageCropModal({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-      <div className="w-full max-w-sm rounded-3xl bg-[#0f172a] border border-white/10 p-5 shadow-2xl space-y-4">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn overflow-y-auto">
+      <div className="w-full max-w-[320px] sm:max-w-[340px] rounded-3xl bg-[#0f172a] border border-white/10 p-4 sm:p-5 shadow-2xl space-y-3.5 my-auto">
         {/* Header */}
         <div className="flex items-center justify-between pb-1 border-b border-white/10">
           <div className="flex items-center gap-2">
             <span className="text-base">✂️</span>
-            <h3 className="text-base font-black text-white">Crop Profile Picture</h3>
+            <h3 className="text-sm sm:text-base font-black text-white">Crop Profile Picture</h3>
           </div>
           <button
             type="button"
@@ -154,7 +166,7 @@ export function ImageCropModal({
         {/* Viewport */}
         <div className="flex flex-col items-center">
           <div
-            className="relative overflow-hidden rounded-2xl select-none cursor-grab active:cursor-grabbing touch-none bg-black/50 border border-white/10"
+            className="relative overflow-hidden rounded-2xl select-none cursor-grab active:cursor-grabbing touch-none bg-black/50 border border-white/10 shadow-inner"
             style={{ width: VIEWPORT_SIZE, height: VIEWPORT_SIZE }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
@@ -185,9 +197,7 @@ export function ImageCropModal({
             >
               <defs>
                 <mask id="crop-circle-mask">
-                  {/* White background: reveal the dark overlay */}
                   <rect x="0" y="0" width={VIEWPORT_SIZE} height={VIEWPORT_SIZE} fill="white" />
-                  {/* Black circle: cut out transparency for the avatar */}
                   <circle
                     cx={VIEWPORT_SIZE / 2}
                     cy={VIEWPORT_SIZE / 2}
@@ -203,7 +213,7 @@ export function ImageCropModal({
                 y="0"
                 width={VIEWPORT_SIZE}
                 height={VIEWPORT_SIZE}
-                fill="rgba(5, 10, 20, 0.72)"
+                fill="rgba(5, 10, 20, 0.75)"
                 mask="url(#crop-circle-mask)"
               />
 
@@ -216,27 +226,27 @@ export function ImageCropModal({
                 stroke="#10b981"
                 strokeWidth="2.5"
                 strokeDasharray="4 4"
-                className="opacity-80"
+                className="opacity-85 shadow-lg"
               />
             </svg>
 
             {/* Hint Badge */}
             <div className="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none">
-              <span className="text-[10px] font-semibold text-slate-300 bg-black/60 px-2 py-0.5 rounded-full border border-white/10 backdrop-blur-sm">
-                Drag to reposition · Scroll or slide to zoom
+              <span className="text-[10px] font-semibold text-slate-300 bg-black/70 px-2 py-0.5 rounded-full border border-white/10 backdrop-blur-sm">
+                Drag to reposition · Scroll to zoom
               </span>
             </div>
           </div>
         </div>
 
         {/* Zoom Controls */}
-        <div className="space-y-1.5 px-1">
-          <div className="flex items-center justify-between text-xs text-slate-400 font-semibold">
+        <div className="space-y-1 px-1">
+          <div className="flex items-center justify-between text-[11px] text-slate-400 font-semibold">
             <span>Zoom</span>
             <span className="text-emerald-400 tabular-nums">{Math.round(zoom * 100)}%</span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <button
               type="button"
               onClick={() => setZoom((z) => Math.max(1, parseFloat((z - 0.15).toFixed(2))))}
@@ -270,19 +280,20 @@ export function ImageCropModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold transition-all border border-white/5 cursor-pointer"
+            className="flex-1 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold transition-all border border-white/5 cursor-pointer"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-black text-xs font-black shadow-lg shadow-emerald-500/20 transition-all cursor-pointer"
+            className="flex-1 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-black text-xs font-black shadow-lg shadow-emerald-500/20 transition-all cursor-pointer"
           >
             Apply & Save
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
