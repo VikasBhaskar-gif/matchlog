@@ -142,7 +142,12 @@ export async function syncLiveMatchScores() {
       if (m.status === "FINISHED" || m.status === "AWARDED") {
         newStatus = "FINISHED";
       } else if (m.status === "IN_PLAY") {
-        newStatus = isPastExpectedEndTime ? "FINISHED" : "LIVE";
+        // If the match is already marked PAUSED (halftime), don't regress to LIVE until 2nd half begins
+        if (dbMatch.status === "PAUSED") {
+          newStatus = "PAUSED";
+        } else {
+          newStatus = isPastExpectedEndTime ? "FINISHED" : "LIVE";
+        }
       } else if (m.status === "PAUSED") {
         newStatus = isPastExpectedEndTime ? "FINISHED" : "PAUSED";
       }
@@ -214,12 +219,128 @@ export async function syncLiveMatchScores() {
   }
 }
 
+/**
+ * Fetch official real-time scores and status from ESPN scoreboard API.
+ * Accurately tracks Halftime, live periods, goals, and full-time scores.
+ */
+export async function syncEspnLiveScores(): Promise<number> {
+  const leagues = ["eng.1", "esp.1", "ger.1", "ita.1", "fra.1", "uefa.champions"];
+  let updatedCount = 0;
+
+  try {
+    const allDbTeams = await db.select().from(teams);
+    const { matchDbTeam } = await import("./espn-goal-sync.service.js");
+
+    for (const league of leagues) {
+      try {
+        const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/scoreboard`);
+        if (!res.ok) continue;
+        const data: any = await res.json();
+        const events = data.events || [];
+
+        for (const ev of events) {
+          const comp = ev.competitions?.[0];
+          if (!comp) continue;
+
+          const homeComp = comp.competitors?.find((c: any) => c.homeAway === "home");
+          const awayComp = comp.competitors?.find((c: any) => c.homeAway === "away");
+          if (!homeComp?.team || !awayComp?.team) continue;
+
+          const homeDbTeam = matchDbTeam(homeComp.team.displayName || homeComp.team.name, allDbTeams);
+          const awayDbTeam = matchDbTeam(awayComp.team.displayName || awayComp.team.name, allDbTeams);
+          if (!homeDbTeam || !awayDbTeam) continue;
+
+          const evDate = new Date(ev.date || comp.date);
+          const dayBefore = new Date(evDate.getTime() - 24 * 60 * 60 * 1000);
+          const dayAfter = new Date(evDate.getTime() + 24 * 60 * 60 * 1000);
+
+          const dbMatch = await db.query.matches.findFirst({
+            where: and(
+              eq(matches.homeTeamId, homeDbTeam.id),
+              eq(matches.awayTeamId, awayDbTeam.id),
+              gte(matches.kickoffAt, dayBefore),
+              lte(matches.kickoffAt, dayAfter)
+            ),
+          });
+
+          if (!dbMatch) continue;
+
+          const statusType = comp.status?.type?.name || "";
+          const statusDesc = (comp.status?.type?.description || "").toLowerCase();
+          const isCompleted = comp.status?.type?.completed === true;
+
+          let newStatus: (typeof dbMatch.status) = dbMatch.status;
+          if (isCompleted || statusType.includes("FINAL") || statusDesc.includes("full time")) {
+            newStatus = "FINISHED";
+          } else if (statusDesc.includes("halftime") || statusType.includes("HALFTIME")) {
+            newStatus = "PAUSED";
+          } else if (
+            statusDesc.includes("in progress") ||
+            statusDesc.includes("first half") ||
+            statusDesc.includes("second half") ||
+            statusType.includes("PROGRESS")
+          ) {
+            newStatus = "LIVE";
+          }
+
+          const homeScore = parseInt(homeComp.score ?? "0", 10);
+          const awayScore = parseInt(awayComp.score ?? "0", 10);
+
+          const hasChanged =
+            dbMatch.status !== newStatus ||
+            dbMatch.homeScore !== homeScore ||
+            dbMatch.awayScore !== awayScore;
+
+          if (hasChanged || (!dbMatch.actualKickoffAt && (newStatus === "LIVE" || newStatus === "PAUSED"))) {
+            const actualKickoffAt =
+              dbMatch.actualKickoffAt ??
+              new Date(new Date(dbMatch.kickoffAt).getTime() + 75_000);
+
+            await db
+              .update(matches)
+              .set({
+                status: newStatus,
+                homeScore,
+                awayScore,
+                homeScoreHalfTime: newStatus === "PAUSED" ? homeScore : dbMatch.homeScoreHalfTime,
+                awayScoreHalfTime: newStatus === "PAUSED" ? awayScore : dbMatch.awayScoreHalfTime,
+                actualKickoffAt,
+                lastSyncedAt: new Date(),
+                updatedAt: new Date(),
+              })
+              .where(eq(matches.id, dbMatch.id));
+
+            if (newStatus === "LIVE" || newStatus === "PAUSED") {
+              await db.delete(matchEvents).where(eq(matchEvents.matchId, dbMatch.id)).catch(() => {});
+            } else if (newStatus === "FINISHED") {
+              const { syncEspnGoalsForMatch } = await import("./espn-goal-sync.service.js");
+              await syncEspnGoalsForMatch(dbMatch.id).catch(() => {});
+            }
+
+            updatedCount++;
+            console.log(`[realtime-worker][ESPN] Updated ${homeDbTeam.name} vs ${awayDbTeam.name}: ${newStatus} (${homeScore}-${awayScore})`);
+          }
+        }
+      } catch (leagueErr) {
+        console.error(`[realtime-worker][ESPN] Error syncing league ${league}:`, leagueErr);
+      }
+    }
+  } catch (err) {
+    console.error("[realtime-worker][ESPN] Error:", err);
+  }
+
+  return updatedCount;
+}
+
 export async function checkRealtimeMatchStatuses() {
   const now = new Date();
   const matchDurationAgo = new Date(Date.now() - 150 * 60 * 1000); // 2.5 hours ago
   const matchOldAgo = new Date(Date.now() - 180 * 60 * 1000); // 3 hours ago
 
-  // 1. Live scorecard sync from football-data.org (handles in-play, pause, and finished results)
+  // 1. Live scorecard sync from ESPN (most accurate real-time scoreboard & halftime tracking)
+  await syncEspnLiveScores().catch((e) => console.error("[realtime-worker] ESPN live score sync failed", e));
+
+  // 2. Secondary live scorecard sync from football-data.org
   await syncLiveMatchScores().catch((e) => console.error("[realtime-worker] Live scorecard sync failed", e));
 
   // 2. Fallback: Any LIVE matches older than 180 mins should be marked FINISHED if API missed it

@@ -32,7 +32,9 @@ export default async function matchRoutes(app: FastifyInstance) {
     if (q.includeDemo !== "true") {
       conditions.push(sql`${matches.source} != 'DEMO'`);
       const supported = await db.select({ id: competitions.id }).from(competitions).where(eq(competitions.isSupported, true));
-      conditions.push(inArray(matches.competitionId, supported.map((c) => c.id)));
+      if (supported.length > 0) {
+        conditions.push(inArray(matches.competitionId, supported.map((c) => c.id)));
+      }
     }
     if (q.season) conditions.push(eq(matches.seasonId, q.season));
     if (q.competition) conditions.push(eq(matches.competitionId, q.competition));

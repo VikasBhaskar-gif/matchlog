@@ -47,14 +47,16 @@ export async function ensureDatabaseSeeded() {
       await sql.unsafe(`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "display_name" text;`);
     } catch {}
 
-    // 2. Check if VikasBhaskar and teams already exist
+    // 2. Check if VikasBhaskar, teams, and matches already exist
     const vikasExists = await sql`SELECT id FROM users WHERE username = 'VikasBhaskar'`;
     const teamsExist = await sql`SELECT count(*) FROM teams`;
     const teamCount = parseInt(teamsExist[0]?.count ?? "0", 10);
+    const matchesExist = await sql`SELECT count(*) FROM matches`;
+    const matchCount = parseInt(matchesExist[0]?.count ?? "0", 10);
     const vikasHash = "$argon2id$v=19$m=65536,t=3,p=4$NGhsYhkTDkrau9PG7tjWYg$oSv7AF9Cu0aDA1wFHTH0diYI5mdXJLtmgo28gFmAf60";
 
-    if (vikasExists.length > 0 && teamCount > 0) {
-      console.log("[DB] Database already contains VikasBhaskar and teams. Ensuring password is up to date.");
+    if (vikasExists.length > 0 && teamCount > 50 && matchCount > 500) {
+      console.log("[DB] Database already contains VikasBhaskar, teams, and matches. Ensuring password is up to date.");
       await sql`UPDATE users SET password_hash = ${vikasHash} WHERE username = 'VikasBhaskar'`;
       try {
         const purged = await sql`DELETE FROM match_events WHERE external_id LIKE 'gen:goal:%'`;
@@ -64,10 +66,10 @@ export async function ensureDatabaseSeeded() {
       } catch (cleanErr) {
         console.warn("[DB] Could not purge legacy gen:goal events:", cleanErr);
       }
-      return { ok: true, skipped: true, reason: "VikasBhaskar and teams already exist; password updated to amaterasu17" };
+      return { ok: true, skipped: true, reason: "Database already populated" };
     }
 
-    // 3. Database is missing VikasBhaskar or core teams, import data_dump.sql
+    // 3. Database is missing VikasBhaskar, core teams, or matches, import data_dump.sql
     console.log("[DB] Importing initial data dump...");
     const dumpCandidates = [
       path.resolve(__dirname, "data_dump.sql"),
@@ -107,12 +109,16 @@ export async function ensureDatabaseSeeded() {
       "public.seasons",
       "public.competition_seasons",
       "public.teams",
+      "public.matches",
       "public.users",
       "public.followed_competitions",
+      "public.followed_teams",
       "public.players",
       "public.followed_players",
-      "public.followed_teams",
-      "public.matches",
+      "public.friend_requests",
+      "public.friendships",
+      "public.predictions",
+      "public.predicted_goalscorers",
       "public.match_events",
       "public.match_players",
       "public.watched_matches",
@@ -141,17 +147,60 @@ export async function ensureDatabaseSeeded() {
       const stmts = stmtsByTable.get(table) || [];
       if (stmts.length === 0) continue;
       console.log(`[DB] Seeding ${table} (${stmts.length} rows)...`);
-      for (let i = 0; i < stmts.length; i += batchSize) {
-        const batch = stmts.slice(i, i + batchSize).join("\n");
-        await sql.unsafe(batch);
+      try {
+        for (let i = 0; i < stmts.length; i += batchSize) {
+          const batch = stmts.slice(i, i + batchSize).join("\n");
+          await sql.unsafe(batch);
+        }
+        totalImported += stmts.length;
+      } catch (tableErr) {
+        console.warn(`[DB] Non-fatal error seeding ${table}:`, (tableErr as Error).message);
       }
-      totalImported += stmts.length;
     }
 
     console.log(`[DB] Successfully imported ${totalImported} statements across all tables!`);
 
     await sql`UPDATE users SET password_hash = ${vikasHash} WHERE username = 'VikasBhaskar'`;
     console.log("[DB] Ensured VikasBhaskar password is set to amaterasu17.");
+
+    // Ensure default friends and bilateral friendships exist
+    try {
+      const chelsea = await sql`SELECT id FROM teams WHERE name ILIKE '%chelsea%' LIMIT 1`;
+      const chelseaId = chelsea[0]?.id;
+      const vikas = await sql`SELECT id FROM users WHERE username = 'VikasBhaskar' LIMIT 1`;
+      if (vikas.length > 0) {
+        const vikasId = vikas[0].id;
+        const defaultFriends = [
+          { username: "AdrianMourinhoe", supportedTeamId: chelseaId },
+          { username: "Tejas", supportedTeamId: null },
+          { username: "ToastedOrange", supportedTeamId: null },
+          { username: "charith", supportedTeamId: null },
+          { username: "ved", supportedTeamId: null },
+        ];
+        for (const f of defaultFriends) {
+          const existing = await sql`SELECT id FROM users WHERE username = ${f.username}`;
+          let friendId = existing[0]?.id;
+          if (!friendId) {
+            const ins = await sql`
+              INSERT INTO users (id, username, password_hash, supported_team_id, onboarding_completed, created_at, updated_at)
+              VALUES (gen_random_uuid(), ${f.username}, ${vikasHash}, ${f.supportedTeamId ?? null}, true, NOW(), NOW())
+              RETURNING id
+            `;
+            friendId = ins[0]?.id;
+          }
+          if (friendId) {
+            const [uA, uB] = [vikasId, friendId].sort();
+            await sql`
+              INSERT INTO friendships (id, user_a_id, user_b_id, created_at)
+              VALUES (gen_random_uuid(), ${uA}, ${uB}, NOW())
+              ON CONFLICT DO NOTHING
+            `;
+          }
+        }
+      }
+    } catch (fErr) {
+      console.warn("[DB] Non-fatal error configuring default friends:", fErr);
+    }
 
     return { ok: true, importedStatements: totalImported, dumpPath };
   } catch (err) {
