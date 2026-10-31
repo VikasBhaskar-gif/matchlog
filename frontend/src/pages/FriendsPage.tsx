@@ -249,6 +249,7 @@ function activityIcon(type: string) {
 function LeaderboardTab() {
   const [metric, setMetric] = useState<"minutes" | "predictions">("minutes");
   const [selectedLeagueId, setSelectedLeagueId] = useState<string>("all");
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const competitions = useCompetitions();
 
   const board = useFriendsLeaderboard(
@@ -256,6 +257,10 @@ function LeaderboardTab() {
     metric === "predictions" ? selectedLeagueId : undefined
   );
   const { user } = useAuth();
+
+  useEffect(() => {
+    setExpandedUserId(null);
+  }, [metric, selectedLeagueId]);
 
   const leaguesScrollRef = useRef<HTMLDivElement>(null);
   const [leaguesScrollProgress, setLeaguesScrollProgress] = useState(0);
@@ -397,50 +402,218 @@ function LeaderboardTab() {
       )}
 
       {!board.isLoading && board.data && board.data.entries.length > 0 && (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {board.data.entries.map((entry, i) => {
             const isMe = entry.userId === user?.id;
             const rank = i + 1;
             const rankBadge = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : rank;
+            const isExpanded = metric === "predictions" && expandedUserId === entry.userId;
 
+            if (metric === "minutes") {
+              return (
+                <Link
+                  key={entry.userId}
+                  to={isMe ? "/profile" : `/users/${entry.userId}`}
+                  viewTransition
+                  className={`flex items-center justify-between rounded-2xl p-3.5 border transition-all ${
+                    isMe
+                      ? "bg-emerald-500/10 border-emerald-500/40 shadow-sm shadow-emerald-500/5"
+                      : "bg-[var(--color-surface)] border-[var(--color-border)] hover:border-emerald-500/30"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="w-6 text-center text-sm font-black text-[var(--color-text-dim)]">
+                      {rankBadge}
+                    </span>
+                    <div className="h-8 w-8 rounded-full bg-[var(--color-surface-2)] overflow-hidden flex items-center justify-center text-xs font-bold border border-white/10">
+                      {entry.avatar ? (
+                        <img src={entry.avatar} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        entry.username[0]?.toUpperCase()
+                      )}
+                    </div>
+                    <span className="text-sm font-bold text-white flex items-center gap-1.5">
+                      <span>{isMe ? "You" : entry.username}</span>
+                      {isMe && (
+                        <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-emerald-500 text-black uppercase">
+                          You
+                        </span>
+                      )}
+                    </span>
+                  </div>
+
+                  <span className="text-sm font-black text-emerald-400 tabular-nums">
+                    {entry.value.toLocaleString()} min
+                  </span>
+                </Link>
+              );
+            }
+
+            // Prediction Points metric with count, overall points, and expandable breakdown
             return (
-              <Link
+              <div
                 key={entry.userId}
-                to={isMe ? "/profile" : `/users/${entry.userId}`}
-                viewTransition
-                className={`flex items-center justify-between rounded-2xl p-3.5 border transition-all ${
+                className={`rounded-2xl border transition-all overflow-hidden ${
                   isMe
                     ? "bg-emerald-500/10 border-emerald-500/40 shadow-sm shadow-emerald-500/5"
                     : "bg-[var(--color-surface)] border-[var(--color-border)] hover:border-emerald-500/30"
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <span className="w-6 text-center text-sm font-black text-[var(--color-text-dim)]">
-                    {rankBadge}
-                  </span>
-                  <div className="h-8 w-8 rounded-full bg-[var(--color-surface-2)] overflow-hidden flex items-center justify-center text-xs font-bold border border-white/10">
-                    {entry.avatar ? (
-                      <img src={entry.avatar} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      entry.username[0]?.toUpperCase()
-                    )}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setExpandedUserId(isExpanded ? null : entry.userId)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setExpandedUserId(isExpanded ? null : entry.userId);
+                    }
+                  }}
+                  className="flex items-center justify-between p-3.5 cursor-pointer select-none gap-2 hover:bg-white/[0.02] transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="w-6 text-center text-sm font-black text-[var(--color-text-dim)] shrink-0">
+                      {rankBadge}
+                    </span>
+
+                    <Link
+                      to={isMe ? "/profile" : `/users/${entry.userId}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-8 w-8 rounded-full bg-[var(--color-surface-2)] overflow-hidden flex items-center justify-center text-xs font-bold border border-white/10 shrink-0 hover:ring-2 hover:ring-emerald-400 transition-all"
+                      title="View profile"
+                    >
+                      {entry.avatar ? (
+                        <img src={entry.avatar} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        entry.username[0]?.toUpperCase()
+                      )}
+                    </Link>
+
+                    <div className="flex items-center gap-2 truncate">
+                      <Link
+                        to={isMe ? "/profile" : `/users/${entry.userId}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-sm font-bold text-white hover:text-emerald-300 transition-colors flex items-center gap-1.5 truncate"
+                      >
+                        <span className="truncate">{isMe ? "You" : entry.username}</span>
+                        {isMe && (
+                          <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-emerald-500 text-black uppercase shrink-0">
+                            You
+                          </span>
+                        )}
+                      </Link>
+                    </div>
                   </div>
-                  <span className="text-sm font-bold text-white flex items-center gap-1.5">
-                    <span>{isMe ? "You" : entry.username}</span>
-                    {isMe && (
-                      <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-emerald-500 text-black uppercase">
-                        You
-                      </span>
-                    )}
-                  </span>
+
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-white/[0.06] text-slate-300 font-semibold border border-white/5 whitespace-nowrap">
+                      {entry.predictedMatchesCount ?? 0} predicted
+                    </span>
+
+                    <span className="text-sm font-black text-emerald-400 tabular-nums">
+                      {entry.value} pts
+                    </span>
+
+                    <svg
+                      className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
+                        isExpanded ? "rotate-180 text-emerald-400" : ""
+                      }`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
                 </div>
 
-                <span className="text-sm font-black text-emerald-400 tabular-nums">
-                  {metric === "minutes"
-                    ? `${entry.value.toLocaleString()} min`
-                    : `${entry.value} pts`}
-                </span>
-              </Link>
+                {/* Dropdown Panel: Points split per finished game */}
+                {isExpanded && (
+                  <div className="p-3 pt-0 border-t border-white/5 space-y-2 bg-black/30">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider pt-2.5 px-1">
+                      <span className="flex items-center gap-1.5 text-slate-300">
+                        <span>🎯</span>
+                        <span>Points split per game</span>
+                      </span>
+                      <span>
+                        {entry.predictions?.length ?? 0} finished
+                      </span>
+                    </div>
+
+                    {(!entry.predictions || entry.predictions.length === 0) ? (
+                      <div className="text-xs text-slate-400 py-3.5 text-center italic bg-white/[0.02] rounded-xl border border-white/5">
+                        No finished match predictions in this category yet.
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {entry.predictions.map((p) => (
+                          <div
+                            key={p.matchId}
+                            className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5 hover:border-emerald-500/20 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                          >
+                            <div className="flex flex-col min-w-0">
+                              {p.competitionName && (
+                                <span className="text-[10px] font-bold text-emerald-400/80 uppercase tracking-wider mb-0.5">
+                                  {p.competitionName}
+                                </span>
+                              )}
+                              <div className="flex items-center gap-2 text-xs font-bold text-white">
+                                {p.homeTeamLogoUrl && (
+                                  <img src={p.homeTeamLogoUrl} alt="" className="w-4 h-4 object-contain shrink-0" />
+                                )}
+                                <span className="truncate">{p.homeTeamShortName || p.homeTeamName}</span>
+                                <span className="text-slate-500 font-normal text-[11px]">vs</span>
+                                {p.awayTeamLogoUrl && (
+                                  <img src={p.awayTeamLogoUrl} alt="" className="w-4 h-4 object-contain shrink-0" />
+                                )}
+                                <span className="truncate">{p.awayTeamShortName || p.awayTeamName}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+                              <div className="text-right">
+                                <span className="text-[10px] text-slate-400 block font-medium">Final</span>
+                                <span className="text-xs font-black text-white tabular-nums">
+                                  {p.actualHomeScore} - {p.actualAwayScore}
+                                </span>
+                              </div>
+
+                              <div className="text-right">
+                                <span className="text-[10px] text-slate-400 block font-medium">Predicted</span>
+                                <span
+                                  className={`text-xs font-black tabular-nums px-2 py-0.5 rounded-lg border ${
+                                    p.predictedHomeScore === p.actualHomeScore &&
+                                    p.predictedAwayScore === p.actualAwayScore
+                                      ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
+                                      : p.pointsAwarded > 0
+                                      ? "bg-teal-500/20 text-teal-300 border-teal-500/30"
+                                      : "bg-white/[0.04] text-slate-400 border-white/5"
+                                  }`}
+                                >
+                                  {p.predictedHomeScore} - {p.predictedAwayScore}
+                                </span>
+                              </div>
+
+                              <div className="text-right min-w-[58px]">
+                                <span className="text-[10px] text-slate-400 block font-medium">Points</span>
+                                <span
+                                  className={`text-xs font-black tabular-nums px-2 py-0.5 rounded-lg border ${
+                                    p.pointsAwarded > 0
+                                      ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-[0_0_8px_rgba(16,185,129,0.25)]"
+                                      : "bg-white/[0.03] text-slate-500 border-white/5"
+                                  }`}
+                                >
+                                  {p.pointsAwarded > 0 ? `+${p.pointsAwarded}` : "0"} pts
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>

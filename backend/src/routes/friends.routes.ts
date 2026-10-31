@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { and, eq, sql, inArray } from "drizzle-orm";
+import { and, eq, sql, inArray, desc } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { users, teams, watchedMatches, predictions, matches } from "../db/schema/index.js";
+import { users, teams, watchedMatches, predictions, matches, competitions } from "../db/schema/index.js";
 import { parseOrThrow } from "../lib/validate.js";
 import {
   sendFriendRequest,
@@ -258,26 +258,100 @@ export default async function friendsRoutes(app: FastifyInstance) {
         conditions.push(eq(matches.competitionId, competitionId));
       }
 
-      const predRows = await db
+      const userPreds = await db
         .select({
+          id: predictions.id,
           userId: predictions.userId,
-          points: sql<number>`coalesce(sum(${predictions.pointsAwarded}), 0)`,
+          matchId: predictions.matchId,
+          predictedHomeScore: predictions.predictedHomeScore,
+          predictedAwayScore: predictions.predictedAwayScore,
+          predictedOutcome: predictions.predictedOutcome,
+          pointsAwarded: predictions.pointsAwarded,
+          scoredAt: predictions.scoredAt,
+          matchStatus: matches.status,
+          kickoffAt: matches.kickoffAt,
+          homeScore: matches.homeScore,
+          awayScore: matches.awayScore,
+          homeTeamId: matches.homeTeamId,
+          awayTeamId: matches.awayTeamId,
+          competitionId: matches.competitionId,
         })
         .from(predictions)
         .innerJoin(matches, eq(matches.id, predictions.matchId))
         .where(and(...conditions))
-        .groupBy(predictions.userId);
+        .orderBy(desc(matches.kickoffAt));
 
-      const pointsMap = new Map(predRows.map((r) => [r.userId, Number(r.points)]));
+      const teamIds = [
+        ...new Set(userPreds.flatMap((p) => [p.homeTeamId, p.awayTeamId]).filter(Boolean)),
+      ] as string[];
+      const compIds = [...new Set(userPreds.map((p) => p.competitionId).filter(Boolean))] as string[];
+
+      const [teamRows, compRows] = await Promise.all([
+        teamIds.length ? db.select().from(teams).where(inArray(teams.id, teamIds)) : Promise.resolve([]),
+        compIds.length ? db.select().from(competitions).where(inArray(competitions.id, compIds)) : Promise.resolve([]),
+      ]);
+
+      const teamMap = new Map(teamRows.map((t) => [t.id, t]));
+      const compMap = new Map(compRows.map((c) => [c.id, c]));
+
+      const predsByUser = new Map<string, typeof userPreds>();
+      for (const p of userPreds) {
+        const list = predsByUser.get(p.userId) ?? [];
+        list.push(p);
+        predsByUser.set(p.userId, list);
+      }
 
       const entries = allUsers
-        .map((u) => ({
-          userId: u.id,
-          username: u.username,
-          avatar: u.avatar,
-          value: pointsMap.get(u.id) ?? 0,
-        }))
-        .sort((a, b) => b.value - a.value);
+        .map((u) => {
+          const preds = predsByUser.get(u.id) ?? [];
+          const totalPoints = preds.reduce((acc, p) => acc + (p.pointsAwarded ?? 0), 0);
+          const predictedMatchesCount = preds.length;
+
+          const finishedList = preds
+            .filter((p) => p.matchStatus === "FINISHED" && p.homeScore !== null && p.awayScore !== null)
+            .map((p) => {
+              const home = p.homeTeamId ? teamMap.get(p.homeTeamId) : null;
+              const away = p.awayTeamId ? teamMap.get(p.awayTeamId) : null;
+              const comp = p.competitionId ? compMap.get(p.competitionId) : null;
+              const pts = p.pointsAwarded ?? 0;
+
+              let breakdownReason = "Miss (0 pts)";
+              const isExact = p.predictedHomeScore === p.homeScore && p.predictedAwayScore === p.awayScore;
+              if (isExact) {
+                breakdownReason = "Exact score";
+              } else if (pts > 0) {
+                breakdownReason = "Correct outcome";
+              }
+
+              return {
+                matchId: p.matchId,
+                homeTeamName: home?.name ?? "Home Team",
+                homeTeamShortName: home?.shortName ?? null,
+                homeTeamLogoUrl: home?.logoUrl ?? null,
+                awayTeamName: away?.name ?? "Away Team",
+                awayTeamShortName: away?.shortName ?? null,
+                awayTeamLogoUrl: away?.logoUrl ?? null,
+                competitionName: comp?.name ?? null,
+                kickoffAt: p.kickoffAt ? p.kickoffAt.toISOString() : null,
+                actualHomeScore: p.homeScore!,
+                actualAwayScore: p.awayScore!,
+                predictedHomeScore: p.predictedHomeScore,
+                predictedAwayScore: p.predictedAwayScore,
+                pointsAwarded: pts,
+                breakdownReason,
+              };
+            });
+
+          return {
+            userId: u.id,
+            username: u.username,
+            avatar: u.avatar,
+            value: totalPoints,
+            predictedMatchesCount,
+            predictions: finishedList,
+          };
+        })
+        .sort((a, b) => b.value - a.value || b.predictedMatchesCount - a.predictedMatchesCount);
 
       return { entries };
     }

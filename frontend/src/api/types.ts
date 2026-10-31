@@ -219,11 +219,31 @@ export type UserProfile = {
   followingCount?: number;
 };
 
+export type PredictionMatchDetail = {
+  matchId: string;
+  homeTeamName: string;
+  homeTeamShortName?: string | null;
+  homeTeamLogoUrl?: string | null;
+  awayTeamName: string;
+  awayTeamShortName?: string | null;
+  awayTeamLogoUrl?: string | null;
+  competitionName?: string | null;
+  kickoffAt?: string | null;
+  actualHomeScore: number;
+  actualAwayScore: number;
+  predictedHomeScore: number;
+  predictedAwayScore: number;
+  pointsAwarded: number;
+  breakdownReason?: string;
+};
+
 export type LeaderboardEntry = {
   userId: string;
   username: string;
   avatar: string | null;
   value: number;
+  predictedMatchesCount?: number;
+  predictions?: PredictionMatchDetail[];
 };
 
 export type PersonalStats = {
