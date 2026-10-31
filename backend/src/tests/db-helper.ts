@@ -2,6 +2,9 @@ import { sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 
 export async function resetDb() {
+  if (!process.env.DATABASE_URL?.includes("test") && process.env.NODE_ENV !== "test") {
+    throw new Error("DANGER: resetDb called on non-test database! Aborting.");
+  }
   await db.execute(sql`
     TRUNCATE TABLE
       friend_activities,
