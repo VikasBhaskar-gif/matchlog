@@ -16,20 +16,7 @@ for (const p of envPaths) {
 }
 
 const envSchema = z.object({
-  DATABASE_URL: z.string().min(1, "DATABASE_URL is required").transform((rawUrl) => {
-    try {
-      const parsed = new URL(rawUrl);
-      if (parsed.hostname && parsed.hostname.startsWith("dpg-") && !parsed.hostname.includes(".")) {
-        const region = process.env.RENDER_REGION || "frankfurt";
-        parsed.hostname = `${parsed.hostname}.${region}-postgres.render.com`;
-        if (!parsed.searchParams.has("sslmode")) {
-          parsed.searchParams.set("sslmode", "require");
-        }
-        return parsed.toString();
-      }
-    } catch {}
-    return rawUrl;
-  }),
+  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   // Optional: OpenFootball (the default football data source) needs no key
   // at all. This is only required if you switch the sync to the
   // ApiFootballProvider — see README "Football data source" section.

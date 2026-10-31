@@ -6,14 +6,13 @@ import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import { getDbSsl } from "./client.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export async function ensureDatabaseSeeded() {
-  const sslOption =
-    env.NODE_ENV === "production" || env.DATABASE_URL.includes("sslmode=require")
-      ? { rejectUnauthorized: false }
-      : false;
+  const sslOption = getDbSsl(env.DATABASE_URL);
 
   const sql = postgres(env.DATABASE_URL, { max: 1, ssl: sslOption });
   const db = drizzle(sql);
