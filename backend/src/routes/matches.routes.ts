@@ -248,7 +248,12 @@ async function enrichMatches(rows: (typeof matches.$inferSelect)[], userId?: str
           })
           .from(matchEvents)
           .leftJoin(players, eq(players.id, matchEvents.playerId))
-          .where(inArray(matchEvents.matchId, matchIds))
+          .where(
+            and(
+              inArray(matchEvents.matchId, matchIds),
+              sql`(${matchEvents.externalId} IS NULL OR ${matchEvents.externalId} NOT LIKE 'gen:goal:%')`
+            )
+          )
           .orderBy(matchEvents.minute)
       : Promise.resolve([]),
   ]);
@@ -290,6 +295,6 @@ async function enrichMatches(rows: (typeof matches.$inferSelect)[], userId?: str
     myWatch: watchMap.get(m.id) ?? null,
     myPrediction: predictionMap.get(m.id) ?? null,
     myPotm: potmMap.get(m.id) ?? null,
-    events: eventMap.get(m.id) ?? [],
+    events: m.status === "LIVE" || m.status === "PAUSED" ? [] : eventMap.get(m.id) ?? [],
   }));
 }

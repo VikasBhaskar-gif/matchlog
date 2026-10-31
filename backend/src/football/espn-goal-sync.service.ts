@@ -131,15 +131,30 @@ export async function processEspnEventsList(
     const windowStart = new Date(evDate.getTime() - 2 * 24 * 3600 * 1000);
     const windowEnd = new Date(evDate.getTime() + 2 * 24 * 3600 * 1000);
 
-    const dbMatch = await db.query.matches.findFirst({
-      where: (m, { and, eq, gte, lte }) =>
-        and(
-          eq(m.homeTeamId, matchedHome.id),
-          eq(m.awayTeamId, matchedAway.id),
-          gte(m.kickoffAt, windowStart),
-          lte(m.kickoffAt, windowEnd)
-        ),
-    });
+    let dbMatch: (typeof matches.$inferSelect) | null | undefined = null;
+    if (targetMatchId) {
+      const target = await db.query.matches.findFirst({
+        where: eq(matches.id, targetMatchId),
+      });
+      if (
+        target &&
+        target.homeTeamId === matchedHome.id &&
+        target.awayTeamId === matchedAway.id
+      ) {
+        dbMatch = target;
+      }
+    }
+    if (!dbMatch) {
+      dbMatch = await db.query.matches.findFirst({
+        where: (m, { and, eq, gte, lte }) =>
+          and(
+            eq(m.homeTeamId, matchedHome.id),
+            eq(m.awayTeamId, matchedAway.id),
+            gte(m.kickoffAt, windowStart),
+            lte(m.kickoffAt, windowEnd)
+          ),
+      });
+    }
 
     if (!dbMatch) continue;
     if (targetMatchId && dbMatch.id !== targetMatchId) continue;
@@ -254,16 +269,25 @@ export async function syncEspnGoalsForMatch(matchId: string): Promise<boolean> {
     if (res.eventsCreated > 0) updated = true;
   }
 
-  // 2. Try match kickoff date
+  // 2. Try match kickoff date and adjacent dates (handling timezone boundary differences)
   if (!updated && match.kickoffAt) {
-    const dateStr = match.kickoffAt.toISOString().slice(0, 10).replace(/-/g, "");
-    const dateRes = await fetch(
-      `https://site.api.espn.com/apis/site/v2/sports/soccer/${espnSlug}/scoreboard?dates=${dateStr}`
-    ).catch(() => null);
-    if (dateRes && dateRes.ok) {
-      const data = await dateRes.json();
-      const res = await processEspnEventsList(data.events ?? [], allDbTeams, matchId);
-      if (res.eventsCreated > 0) updated = true;
+    const d = new Date(match.kickoffAt);
+    const datesToTry = [
+      d.toISOString().slice(0, 10).replace(/-/g, ""),
+      new Date(d.getTime() - 24 * 3600 * 1000).toISOString().slice(0, 10).replace(/-/g, ""),
+      new Date(d.getTime() + 24 * 3600 * 1000).toISOString().slice(0, 10).replace(/-/g, ""),
+    ];
+
+    for (const dateStr of datesToTry) {
+      if (updated) break;
+      const dateRes = await fetch(
+        `https://site.api.espn.com/apis/site/v2/sports/soccer/${espnSlug}/scoreboard?dates=${dateStr}`
+      ).catch(() => null);
+      if (dateRes && dateRes.ok) {
+        const data = await dateRes.json();
+        const res = await processEspnEventsList(data.events ?? [], allDbTeams, matchId);
+        if (res.eventsCreated > 0) updated = true;
+      }
     }
   }
 

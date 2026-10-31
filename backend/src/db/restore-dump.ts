@@ -56,6 +56,14 @@ export async function ensureDatabaseSeeded() {
     if (vikasExists.length > 0 && teamCount > 0) {
       console.log("[DB] Database already contains VikasBhaskar and teams. Ensuring password is up to date.");
       await sql`UPDATE users SET password_hash = ${vikasHash} WHERE username = 'VikasBhaskar'`;
+      try {
+        const purged = await sql`DELETE FROM match_events WHERE external_id LIKE 'gen:goal:%'`;
+        if (purged.count > 0) {
+          console.log(`[DB] Purged ${purged.count} legacy gen:goal pseudo-events from database.`);
+        }
+      } catch (cleanErr) {
+        console.warn("[DB] Could not purge legacy gen:goal events:", cleanErr);
+      }
       return { ok: true, skipped: true, reason: "VikasBhaskar and teams already exist; password updated to amaterasu17" };
     }
 

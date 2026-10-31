@@ -1,6 +1,6 @@
 import { db } from "../db/client.js";
 import { matches, teams, matchEvents } from "../db/schema/index.js";
-import { and, eq, lt, lte, gte, or, ilike } from "drizzle-orm";
+import { and, eq, lt, lte, gte, or, ilike, inArray, sql } from "drizzle-orm";
 import { processFinishedMatchPredictions } from "../sync/process-predictions.js";
 import { env } from "../lib/env.js";
 
@@ -240,9 +240,55 @@ export async function checkRealtimeMatchStatuses() {
   if (newlyLive.length > 0) {
     console.log(`[realtime-worker] Transitioned ${newlyLive.length} scheduled matches to LIVE.`);
   }
+
+  // 4. Ensure recently finished matches with scores have official ESPN goal events
+  try {
+    const recentFinishedWithGoals = await db
+      .select({ id: matches.id })
+      .from(matches)
+      .where(
+        and(
+          eq(matches.status, "FINISHED"),
+          sql`(${matches.homeScore} + ${matches.awayScore}) > 0`,
+          gte(matches.kickoffAt, new Date(Date.now() - 72 * 60 * 60 * 1000))
+        )
+      );
+
+    if (recentFinishedWithGoals.length > 0) {
+      const candidateIds = recentFinishedWithGoals.map((m) => m.id);
+      const existingEvents = await db
+        .select({ matchId: matchEvents.matchId })
+        .from(matchEvents)
+        .where(
+          and(
+            inArray(matchEvents.matchId, candidateIds),
+            sql`${matchEvents.externalId} NOT LIKE 'gen:goal:%'`
+          )
+        );
+      const covered = new Set(existingEvents.map((e) => e.matchId));
+      const missing = candidateIds.filter((id) => !covered.has(id));
+
+      if (missing.length > 0) {
+        const { syncEspnGoalsForMatch } = await import("./espn-goal-sync.service.js");
+        for (const id of missing.slice(0, 5)) {
+          await syncEspnGoalsForMatch(id).catch(() => {});
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[realtime-worker] Error syncing missing events for recent matches:", err);
+  }
 }
 
 export function startRealtimeStatusWorker() {
+  // Purge legacy fake generated goal events from database immediately on startup
+  db.delete(matchEvents)
+    .where(sql`${matchEvents.externalId} LIKE 'gen:goal:%'`)
+    .then((res) => {
+      console.log("[realtime-worker] Stale gen:goal events purged from database.");
+    })
+    .catch((e) => console.error("[realtime-worker] Failed to purge stale gen:goal events:", e));
+
   // Run once immediately on server startup
   checkRealtimeMatchStatuses().catch((e) => console.error("[realtime-worker] initial run failed", e));
 
