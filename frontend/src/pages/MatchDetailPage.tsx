@@ -10,7 +10,6 @@ import { PotmPicker } from "../components/PotmPicker";
 import { MatchReviewsSection } from "../components/MatchReviewsSection";
 import { MatchPredictionsLeaderboard } from "../components/MatchPredictionsLeaderboard";
 import { formatKickoff, statusLabel, canRecordWatch, teamInitials, formatRound, formatMatchMinute } from "../lib/format";
-import { useLiveMatchClock } from "../hooks/useLiveMatchClock";
 import type { MatchEvent } from "../api/types";
 
 interface GoalMinuteItem {
@@ -84,11 +83,6 @@ export function MatchDetailPage() {
   const [showWatchModal, setShowWatchModal] = useState(false);
   const [activeSubpart, setActiveSubpart] = useState<"reviews" | "potm" | "predictions">("reviews");
   const qc = useQueryClient();
-  const liveClock = useLiveMatchClock(
-    data?.match?.kickoffAt,
-    data?.match?.status,
-    data?.match?.actualKickoffAt
-  );
 
   if (isLoading) return <LoadingState label="Loading match..." />;
   if (isError || !data) return <ErrorState message="Couldn't load this match." onRetry={refetch} />;
@@ -194,18 +188,15 @@ export function MatchDetailPage() {
                   </span>
                 </div>
 
-                {/* Live Running Minute Clock / Half-time display */}
+                {/* Score Status / Half-time display (clock removed) */}
                 {isLive ? (
-                  <div className="flex flex-col items-center mt-2 space-y-0.5">
-                    <span className="text-lg sm:text-xl font-black font-mono text-emerald-400 tracking-wider tabular-nums drop-shadow-[0_0_12px_rgba(52,211,153,0.35)]">
-                      {liveClock.display}
-                    </span>
-                    {match.homeScoreHalfTime !== null && match.awayScoreHalfTime !== null && (
+                  match.homeScoreHalfTime !== null && match.awayScoreHalfTime !== null ? (
+                    <div className="flex flex-col items-center mt-2">
                       <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                         HT: {match.homeScoreHalfTime} - {match.awayScoreHalfTime}
                       </span>
-                    )}
-                  </div>
+                    </div>
+                  ) : null
                 ) : isPaused ? (
                   <div className="flex flex-col items-center mt-2 space-y-0.5">
                     <span className="text-sm sm:text-base font-black font-mono text-amber-400 tracking-wider uppercase">
@@ -218,10 +209,11 @@ export function MatchDetailPage() {
                     )}
                   </div>
                 ) : (
-                  match.homeScoreHalfTime !== null && match.awayScoreHalfTime !== null && (
-                    <span className="text-[11px] font-bold text-slate-400 mt-1.5 uppercase tracking-wider">
+                  match.homeScoreHalfTime !== null &&
+                  match.awayScoreHalfTime !== null && (
+                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-1">
                       HT: {match.homeScoreHalfTime} - {match.awayScoreHalfTime}
-                    </span>
+                    </div>
                   )
                 )}
               </div>
