@@ -137,7 +137,7 @@ export function AppLayout() {
               }`
             }
           >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center font-black text-xs text-black shadow-md shrink-0 overflow-hidden ring-2 ring-emerald-400/40 group-hover:scale-105 transition-transform">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center font-black text-xs text-black shadow-md shrink-0 overflow-hidden ring-2 ring-emerald-400/40 group-hover:scale-105 transition-transform">
               {user.avatar ? (
                 <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
               ) : (

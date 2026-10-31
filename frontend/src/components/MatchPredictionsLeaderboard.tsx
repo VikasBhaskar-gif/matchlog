@@ -88,7 +88,7 @@ export function MatchPredictionsLeaderboard({
                       viewTransition
                       className="flex items-center gap-2.5 group min-w-0"
                     >
-                      <div className="h-8 w-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-xs font-black text-black shrink-0 overflow-hidden border border-white/10">
+                      <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-xs font-black text-black shrink-0 overflow-hidden border border-white/10">
                         {item.user.avatar ? (
                           <img
                             src={item.user.avatar}
