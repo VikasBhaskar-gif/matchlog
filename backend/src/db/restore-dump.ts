@@ -26,42 +26,7 @@ export async function ensureDatabaseSeeded() {
   const db = drizzle(sql);
 
   try {
-    // 1. Ensure all tables & enums exist from schema.sql first (bulletproof DDL)
-    const schemaCandidates = [
-      path.resolve(__dirname, "schema.sql"),
-      path.resolve(__dirname, "db/schema.sql"),
-      path.resolve(__dirname, "../db/schema.sql"),
-      path.resolve(__dirname, "../src/db/schema.sql"),
-      path.resolve(__dirname, "../../src/db/schema.sql"),
-      path.resolve(process.cwd(), "src/db/schema.sql"),
-      path.resolve(process.cwd(), "backend/src/db/schema.sql"),
-      path.resolve(process.cwd(), "dist/db/schema.sql"),
-      path.resolve(process.cwd(), "backend/dist/db/schema.sql"),
-    ];
-    const schemaPath = schemaCandidates.find((p) => fs.existsSync(p));
-    if (schemaPath) {
-      logDb(`[DB] Found schema.sql at: ${schemaPath}`);
-      const rawSchema = fs.readFileSync(schemaPath, "utf-8");
-      const lines = rawSchema
-        .split("\n")
-        .filter((l) => !l.trim().startsWith("--") && !l.trim().startsWith("\\"));
-      const stmts = lines.join("\n").split(";").map((s) => s.trim()).filter((s) => s.length > 0);
-      logDb(`[DB] Executing ${stmts.length} DDL statements...`);
-      let applied = 0;
-      for (const s of stmts) {
-        try {
-          await sql.unsafe(s + ";");
-          applied++;
-        } catch {
-          // Ignore already exists
-        }
-      }
-      logDb(`[DB] Schema check complete (${applied}/${stmts.length} executed).`);
-    } else {
-      logDb(`[DB] WARNING: schema.sql NOT found! Candidates: ${JSON.stringify(schemaCandidates)}`);
-    }
-
-    // 2. Also run any incremental migrations if present
+    // 1. Run migrations to create/update all tables, enums, and indexes
     const migrationCandidates = [
       path.resolve(__dirname, "migrations"),
       path.resolve(__dirname, "../src/db/migrations"),
@@ -72,13 +37,12 @@ export async function ensureDatabaseSeeded() {
       path.resolve(process.cwd(), "backend/dist/db/migrations"),
     ];
     const migrationsFolder = migrationCandidates.find((p) => fs.existsSync(p));
-    try {
-      if (migrationsFolder) {
-        await migrate(db, { migrationsFolder });
-        logDb("[DB] Migrations check finished.");
-      }
-    } catch (migErr: any) {
-      logDb(`[DB] Migrations notice: ${migErr?.message}`);
+    if (migrationsFolder) {
+      logDb(`[DB] Running migrations from: ${migrationsFolder}`);
+      await migrate(db, { migrationsFolder });
+      logDb("[DB] Migrations finished successfully.");
+    } else {
+      logDb(`[DB] WARNING: Migrations folder not found in: ${JSON.stringify(migrationCandidates)}`);
     }
 
     // Ensure display_name column exists if dump references it
