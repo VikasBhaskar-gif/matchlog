@@ -11,8 +11,16 @@ import { getDbSsl } from "./client.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+export const dbLogs: string[] = [];
+export function logDb(msg: string) {
+  console.log(msg);
+  dbLogs.push(`[${new Date().toISOString()}] ${msg}`);
+  if (dbLogs.length > 100) dbLogs.shift();
+}
+
 export async function ensureDatabaseSeeded() {
   const sslOption = getDbSsl(env.DATABASE_URL);
+  logDb(`[DB] Seeding started. Host: ${new URL(env.DATABASE_URL).hostname}, ssl: ${JSON.stringify(sslOption)}`);
 
   const sql = postgres(env.DATABASE_URL, { max: 5, ssl: sslOption, connect_timeout: 10 });
   const db = drizzle(sql);
@@ -32,20 +40,25 @@ export async function ensureDatabaseSeeded() {
     ];
     const schemaPath = schemaCandidates.find((p) => fs.existsSync(p));
     if (schemaPath) {
-      console.log("[DB] Ensuring schema from:", schemaPath);
+      logDb(`[DB] Found schema.sql at: ${schemaPath}`);
       const rawSchema = fs.readFileSync(schemaPath, "utf-8");
       const lines = rawSchema
         .split("\n")
         .filter((l) => !l.trim().startsWith("--") && !l.trim().startsWith("\\"));
       const stmts = lines.join("\n").split(";").map((s) => s.trim()).filter((s) => s.length > 0);
+      logDb(`[DB] Executing ${stmts.length} DDL statements...`);
+      let applied = 0;
       for (const s of stmts) {
         try {
           await sql.unsafe(s + ";");
+          applied++;
         } catch {
           // Ignore already exists
         }
       }
-      console.log(`[DB] Schema check complete (${stmts.length} DDL statements verified).`);
+      logDb(`[DB] Schema check complete (${applied}/${stmts.length} executed).`);
+    } else {
+      logDb(`[DB] WARNING: schema.sql NOT found! Candidates: ${JSON.stringify(schemaCandidates)}`);
     }
 
     // 2. Also run any incremental migrations if present
@@ -62,10 +75,10 @@ export async function ensureDatabaseSeeded() {
     try {
       if (migrationsFolder) {
         await migrate(db, { migrationsFolder });
-        console.log("[DB] Migrations check finished.");
+        logDb("[DB] Migrations check finished.");
       }
-    } catch (migErr) {
-      console.warn("[DB] Migrations notice:", migErr);
+    } catch (migErr: any) {
+      logDb(`[DB] Migrations notice: ${migErr?.message}`);
     }
 
     // Ensure display_name column exists if dump references it
@@ -83,28 +96,29 @@ export async function ensureDatabaseSeeded() {
       teamCount = parseInt(teamsExist[0]?.count ?? "0", 10);
       const matchesExist = await sql`SELECT count(*) FROM matches`;
       matchCount = parseInt(matchesExist[0]?.count ?? "0", 10);
+      logDb(`[DB] Counts: vikas=${vikasExists.length}, teams=${teamCount}, matches=${matchCount}`);
     } catch (checkErr: any) {
-      console.warn("[DB] Tables check notice (database might be unseeded):", checkErr?.message);
+      logDb(`[DB] Tables check notice: ${checkErr?.message}`);
     }
 
     const vikasHash = "$argon2id$v=19$m=65536,t=3,p=4$NGhsYhkTDkrau9PG7tjWYg$oSv7AF9Cu0aDA1wFHTH0diYI5mdXJLtmgo28gFmAf60";
 
     if (vikasExists.length > 0 && teamCount > 50 && matchCount > 500) {
-      console.log("[DB] Database already contains VikasBhaskar, teams, and matches. Ensuring password is up to date.");
+      logDb("[DB] Database already contains VikasBhaskar, teams, and matches. Ensuring password is up to date.");
       await sql`UPDATE users SET password_hash = ${vikasHash} WHERE username = 'VikasBhaskar'`;
       try {
         const purged = await sql`DELETE FROM match_events WHERE external_id LIKE 'gen:goal:%'`;
         if (purged.count > 0) {
-          console.log(`[DB] Purged ${purged.count} legacy gen:goal pseudo-events from database.`);
+          logDb(`[DB] Purged ${purged.count} legacy gen:goal pseudo-events from database.`);
         }
-      } catch (cleanErr) {
-        console.warn("[DB] Could not purge legacy gen:goal events:", cleanErr);
+      } catch (cleanErr: any) {
+        logDb(`[DB] Could not purge legacy gen:goal events: ${cleanErr?.message}`);
       }
       return { ok: true, skipped: true, reason: "Database already populated" };
     }
 
     // 3. Database is missing VikasBhaskar, core teams, or matches, import data_dump.sql
-    console.log("[DB] Importing initial data dump...");
+    logDb("[DB] Importing initial data dump...");
     const dumpCandidates = [
       path.resolve(__dirname, "data_dump.sql"),
       path.resolve(__dirname, "db/data_dump.sql"),
@@ -119,11 +133,11 @@ export async function ensureDatabaseSeeded() {
     const dumpPath = dumpCandidates.find((p) => fs.existsSync(p));
     if (!dumpPath) {
       const msg = `data_dump.sql not found in candidate paths: ${JSON.stringify(dumpCandidates)}`;
-      console.warn("[DB]", msg);
+      logDb(`[DB] ${msg}`);
       return { ok: false, reason: msg };
     }
 
-    console.log("[DB] Reading data dump from:", dumpPath);
+    logDb(`[DB] Reading data dump from: ${dumpPath}`);
     const rawSql = fs.readFileSync(dumpPath, "utf-8");
 
     // Filter out comment lines so the first statement of every table isn't dropped!
@@ -180,19 +194,19 @@ export async function ensureDatabaseSeeded() {
     for (const table of TABLE_INSERT_ORDER) {
       const stmts = stmtsByTable.get(table) || [];
       if (stmts.length === 0) continue;
-      console.log(`[DB] Seeding ${table} (${stmts.length} rows)...`);
+      logDb(`[DB] Seeding ${table} (${stmts.length} rows)...`);
       try {
         for (let i = 0; i < stmts.length; i += batchSize) {
           const batch = stmts.slice(i, i + batchSize).join("\n");
           await sql.unsafe(batch);
         }
         totalImported += stmts.length;
-      } catch (tableErr) {
-        console.warn(`[DB] Non-fatal error seeding ${table}:`, (tableErr as Error).message);
+      } catch (tableErr: any) {
+        logDb(`[DB] Error seeding ${table}: ${tableErr?.message}`);
       }
     }
 
-    console.log(`[DB] Successfully imported ${totalImported} statements across all tables!`);
+    logDb(`[DB] Successfully imported ${totalImported} statements across all tables!`);
 
     await sql`UPDATE users SET password_hash = ${vikasHash} WHERE username = 'VikasBhaskar'`;
     console.log("[DB] Ensured VikasBhaskar password is set to amaterasu17.");
@@ -237,7 +251,8 @@ export async function ensureDatabaseSeeded() {
     }
 
     return { ok: true, importedStatements: totalImported, dumpPath };
-  } catch (err) {
+  } catch (err: any) {
+    logDb(`[DB] FATAL ERROR in ensureDatabaseSeeded: ${err?.message} (${err?.code})`);
     console.error("[DB] Migration / seeding error:", err);
     throw err;
   } finally {
