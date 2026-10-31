@@ -38,7 +38,39 @@ export async function ensureDatabaseSeeded() {
         console.warn("[DB] Migrations folder not found in candidates:", migrationCandidates);
       }
     } catch (migErr) {
-      console.warn("[DB] Migrations notice (tables may already exist):", migErr);
+      console.warn("[DB] Migrations notice:", migErr);
+    }
+
+    // Fallback: If tables still don't exist (e.g. fresh DB where migrations had lock or enum conflicts), apply schema.sql
+    try {
+      const chk = await sql`SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'matches'`;
+      const hasMatchesTable = parseInt(chk[0]?.count ?? "0", 10) > 0;
+      if (!hasMatchesTable) {
+        console.log("[DB] 'matches' table not found. Applying schema.sql DDL...");
+        const schemaCandidates = [
+          path.resolve(__dirname, "schema.sql"),
+          path.resolve(__dirname, "db/schema.sql"),
+          path.resolve(__dirname, "../db/schema.sql"),
+          path.resolve(__dirname, "../src/db/schema.sql"),
+          path.resolve(__dirname, "../../src/db/schema.sql"),
+          path.resolve(process.cwd(), "src/db/schema.sql"),
+          path.resolve(process.cwd(), "backend/src/db/schema.sql"),
+          path.resolve(process.cwd(), "dist/db/schema.sql"),
+          path.resolve(process.cwd(), "backend/dist/db/schema.sql"),
+        ];
+        const schemaPath = schemaCandidates.find((p) => fs.existsSync(p));
+        if (schemaPath) {
+          const rawSchema = fs.readFileSync(schemaPath, "utf-8");
+          const cleanSchema = rawSchema
+            .split("\n")
+            .filter((l) => !l.trim().startsWith("--") && !l.trim().startsWith("\\"))
+            .join("\n");
+          await sql.unsafe(cleanSchema);
+          console.log("[DB] schema.sql DDL executed successfully.");
+        }
+      }
+    } catch (schemaErr: any) {
+      console.warn("[DB] Schema fallback notice:", schemaErr?.message);
     }
 
     // Ensure display_name column exists if dump references it
@@ -47,11 +79,19 @@ export async function ensureDatabaseSeeded() {
     } catch {}
 
     // 2. Check if VikasBhaskar, teams, and matches already exist
-    const vikasExists = await sql`SELECT id FROM users WHERE username = 'VikasBhaskar'`;
-    const teamsExist = await sql`SELECT count(*) FROM teams`;
-    const teamCount = parseInt(teamsExist[0]?.count ?? "0", 10);
-    const matchesExist = await sql`SELECT count(*) FROM matches`;
-    const matchCount = parseInt(matchesExist[0]?.count ?? "0", 10);
+    let vikasExists: any[] = [];
+    let teamCount = 0;
+    let matchCount = 0;
+    try {
+      vikasExists = await sql`SELECT id FROM users WHERE username = 'VikasBhaskar'`;
+      const teamsExist = await sql`SELECT count(*) FROM teams`;
+      teamCount = parseInt(teamsExist[0]?.count ?? "0", 10);
+      const matchesExist = await sql`SELECT count(*) FROM matches`;
+      matchCount = parseInt(matchesExist[0]?.count ?? "0", 10);
+    } catch (checkErr: any) {
+      console.warn("[DB] Tables check notice (database might be unseeded):", checkErr?.message);
+    }
+
     const vikasHash = "$argon2id$v=19$m=65536,t=3,p=4$NGhsYhkTDkrau9PG7tjWYg$oSv7AF9Cu0aDA1wFHTH0diYI5mdXJLtmgo28gFmAf60";
 
     if (vikasExists.length > 0 && teamCount > 50 && matchCount > 500) {

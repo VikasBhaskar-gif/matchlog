@@ -23,4 +23,11 @@ if (fs.existsSync(dataDumpSrc)) {
   console.log("[Build] Copied data_dump.sql to", dataDumpDest);
 }
 
+const schemaSrc = path.join(backendRoot, "src/db/schema.sql");
+const schemaDest = path.join(distDb, "schema.sql");
+if (fs.existsSync(schemaSrc)) {
+  fs.copyFileSync(schemaSrc, schemaDest);
+  console.log("[Build] Copied schema.sql to", schemaDest);
+}
+
 console.log("[Build] Backend asset preparation complete.");

@@ -13,6 +13,9 @@ import { ValidationError } from "./lib/validate.js";
 import { AuthError } from "./services/auth.service.js";
 import authPlugin from "./plugins/auth.js";
 
+import { db } from "./db/client.js";
+import { competitions } from "./db/schema/index.js";
+import { sql } from "drizzle-orm";
 import authRoutes from "./routes/auth.routes.js";
 import seasonRoutes from "./routes/seasons.routes.js";
 import competitionRoutes from "./routes/competitions.routes.js";
@@ -93,7 +96,11 @@ export async function buildApp() {
       return;
     }
     request.log.error(error);
-    reply.code(500).send({ error: "Internal server error" });
+    reply.code(500).send({
+      error: "Internal server error",
+      detail: (error as Error).message,
+      code: (error as any).code,
+    });
   });
 
   await app.register(authRoutes);
@@ -112,7 +119,18 @@ export async function buildApp() {
   await app.register(friendsRoutes);
   await app.register(reviewRoutes);
 
-  app.get("/api/health", async () => ({ ok: true, env: env.NODE_ENV }));
+  app.get("/api/health", async () => {
+    let dbStatus = "ok";
+    let dbDetail: any = null;
+    try {
+      const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(competitions);
+      dbDetail = { competitionsCount: Number(count) };
+    } catch (e: any) {
+      dbStatus = "error";
+      dbDetail = { message: e.message, code: e.code };
+    }
+    return { ok: dbStatus === "ok", env: env.NODE_ENV, dbStatus, dbDetail };
+  });
 
   const distCandidates = [
     path.resolve(__dirname, "../../frontend/dist"),

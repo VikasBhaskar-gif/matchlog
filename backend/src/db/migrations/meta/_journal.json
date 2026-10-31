@@ -92,6 +92,13 @@
       "when": 1790500000000,
       "tag": "0012_match_players_tactical",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790600000000,
+      "tag": "0013_match_actual_kickoff_at",
+      "breakpoints": true
     }
   ]
 }

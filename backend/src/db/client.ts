@@ -3,7 +3,7 @@ import postgres from "postgres";
 import { env } from "../lib/env.js";
 import * as schema from "./schema/index.js";
 
-export function getDbSsl(rawUrl: string): false | { rejectUnauthorized: boolean } {
+export function getDbSsl(rawUrl: string): false | "prefer" | { rejectUnauthorized: boolean } {
   try {
     const url = new URL(rawUrl);
     // Local connections never use SSL
@@ -15,21 +15,17 @@ export function getDbSsl(rawUrl: string): false | { rejectUnauthorized: boolean 
     ) {
       return false;
     }
-    // Explicit sslmode in query params
+    // Explicit require/no-verify in query params
     const sslmode = url.searchParams.get("sslmode");
-    if (sslmode === "require" || sslmode === "no-verify" || sslmode === "prefer") {
+    if (sslmode === "require" || sslmode === "no-verify") {
       return { rejectUnauthorized: false };
     }
-    // If it's a Render internal host (dpg-xxxx-a with no dots), it connects via private VPC network without SSL
-    if (url.hostname.startsWith("dpg-") && !url.hostname.includes(".")) {
-      return false;
-    }
-    // External remote databases (e.g. *.render.com, *.neon.tech, *.supabase.co, AWS, etc.)
-    if (url.hostname.includes(".") || process.env.NODE_ENV === "production") {
-      return { rejectUnauthorized: false };
-    }
+    // Remote databases (Render internal dpg-*, Render external, Supabase, Neon, etc.)
+    // 'prefer' lets postgres.js negotiate TLS with rejectUnauthorized: false if supported/required,
+    // while gracefully falling back to unencrypted if the database has SSL disabled.
+    return "prefer";
   } catch {}
-  return false;
+  return "prefer";
 }
 
 const sslOption = getDbSsl(env.DATABASE_URL);
