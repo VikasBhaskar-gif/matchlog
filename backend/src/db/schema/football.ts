@@ -144,6 +144,7 @@ export const matches = pgTable(
     homeTeamPlaceholder: text("home_team_placeholder"),
     awayTeamPlaceholder: text("away_team_placeholder"),
     kickoffAt: timestamp("kickoff_at", { withTimezone: true }).notNull(),
+    actualKickoffAt: timestamp("actual_kickoff_at", { withTimezone: true }),
     status: matchStatusEnum("status").notNull().default("SCHEDULED"),
     homeScore: integer("home_score"),
     awayScore: integer("away_score"),

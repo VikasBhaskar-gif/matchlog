@@ -128,6 +128,7 @@ export type Match = {
   homeTeamId: string | null;
   awayTeamId: string | null;
   kickoffAt: string;
+  actualKickoffAt?: string | null;
   kickoffTimeConfirmed: boolean;
   status: MatchStatus;
   homeScore: number | null;

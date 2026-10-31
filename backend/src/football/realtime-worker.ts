@@ -164,7 +164,12 @@ export async function syncLiveMatchScores() {
         dbMatch.homeScoreHalfTime !== homeScoreHalfTime ||
         dbMatch.awayScoreHalfTime !== awayScoreHalfTime;
 
-      if (hasChanged) {
+      // Track when kickoff was actually detected (starts the live clock accurately without premature ticking)
+      const actualKickoffAt =
+        dbMatch.actualKickoffAt ??
+        (newStatus === "LIVE" ? new Date() : null);
+
+      if (hasChanged || (!dbMatch.actualKickoffAt && newStatus === "LIVE")) {
         await db
           .update(matches)
           .set({
@@ -178,6 +183,7 @@ export async function syncLiveMatchScores() {
             wentToPenalties,
             homePenalties,
             awayPenalties,
+            actualKickoffAt,
             lastSyncedAt: new Date(),
             updatedAt: new Date(),
           })
@@ -230,11 +236,17 @@ export async function checkRealtimeMatchStatuses() {
     );
   }
 
-  // 3. Fallback: Any SCHEDULED matches whose kickoff time has arrived transition to LIVE
+  // 3. Fallback: Only transition SCHEDULED matches to LIVE if at least 10 minutes past kickoff
+  // and the live API failed to report it (prevents premature LIVE status before kickoff actually happens)
+  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
   const newlyLive = await db
     .update(matches)
-    .set({ status: "LIVE", updatedAt: now })
-    .where(and(eq(matches.status, "SCHEDULED"), lte(matches.kickoffAt, now), gte(matches.kickoffAt, matchDurationAgo)))
+    .set({
+      status: "LIVE",
+      actualKickoffAt: sql`coalesce(${matches.actualKickoffAt}, ${matches.kickoffAt} + interval '90 seconds')`,
+      updatedAt: now,
+    })
+    .where(and(eq(matches.status, "SCHEDULED"), lte(matches.kickoffAt, tenMinutesAgo), gte(matches.kickoffAt, matchDurationAgo)))
     .returning({ id: matches.id });
 
   if (newlyLive.length > 0) {

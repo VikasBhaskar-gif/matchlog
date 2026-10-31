@@ -1,22 +1,23 @@
 export interface LiveMatchClockState {
-  display: string;      // e.g. "76:10", "34:20", "HT", "90:00+"
-  minuteText: string;   // e.g. "76'", "HT", "90+3'"
-  minute: number;       // integer minute e.g. 76, 45, 90
+  display: string;      // e.g. "03:52", "45:10", "HT", "76:10", "90:00+"
+  minuteText: string;   // e.g. "4'", "45+2'", "HT", "77'", "90+'"
+  minute: number;       // integer minute e.g. 4, 45, 77, 90
   phase: "PRE" | "1H" | "HT" | "2H" | "ET" | "FT";
 }
 
 /**
  * Computes the real-time match clock for football matches.
- * Standard football timing:
- * - 0m to 45m: First Half (00:00 to 45:00)
- * - 45m to ~48m: 1st Half Stoppage Time (45:00+)
- * - ~48m to ~60m: Half-Time break (HT)
- * - ~60m to ~105m: Second Half (45:00 to 90:00, ticking continuously, e.g. 76:10)
- * - >105m: 2nd Half Stoppage Time (90:00+)
+ * Football matches almost never kick off at 00:00s of scheduled time due to player
+ * walkout, anthems, team huddles, and referee pre-match protocols (~60-90s delay).
+ * In addition, live broadcast streams typically have a 20-40s stream latency behind
+ * live pitch action.
+ * This clock ensures the displayed match time is on track or conservative (slightly behind),
+ * and NEVER runs ahead of the live broadcast.
  */
 export function getLiveMatchTime(
   kickoffAt?: string | Date | null,
-  status?: string | null
+  status?: string | null,
+  actualKickoffAt?: string | Date | null
 ): LiveMatchClockState {
   if (!kickoffAt || !status) {
     return { display: "", minuteText: "", minute: 0, phase: "PRE" };
@@ -40,7 +41,32 @@ export function getLiveMatchTime(
   }
 
   const nowMs = Date.now();
-  const diffSecs = Math.max(0, Math.floor((nowMs - kickoffMs) / 1000));
+
+  // If actual kickoff was detected, use it with a small 20s broadcast buffer.
+  // Otherwise, use scheduled kickoffAt with a realistic 80s walkout/kickoff delay buffer.
+  let diffSecs: number;
+  if (actualKickoffAt) {
+    const actualMs = new Date(actualKickoffAt).getTime();
+    if (!isNaN(actualMs)) {
+      // 20s stream latency buffer ensures our clock is never ahead of live TV / web stream
+      diffSecs = Math.max(0, Math.floor((nowMs - actualMs - 20_000) / 1000));
+    } else {
+      diffSecs = Math.max(0, Math.floor((nowMs - kickoffMs - 80_000) / 1000));
+    }
+  } else {
+    // 80s buffer: match walkout (~60s) + broadcast stream latency (~20s)
+    diffSecs = Math.max(0, Math.floor((nowMs - kickoffMs - 80_000) / 1000));
+  }
+
+  // Before kickoff whistle actually blows (during walkout/lineup)
+  if (diffSecs <= 0) {
+    return {
+      display: "00:00",
+      minuteText: "1'",
+      minute: 1,
+      phase: "1H",
+    };
+  }
 
   // First half: 0 to 45 mins (0 to 2700s)
   if (diffSecs < 45 * 60) {
@@ -49,8 +75,8 @@ export function getLiveMatchTime(
     const display = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
     return {
       display,
-      minuteText: `${mins}'`,
-      minute: mins,
+      minuteText: `${mins + 1}'`,
+      minute: mins + 1,
       phase: "1H",
     };
   }
@@ -68,8 +94,8 @@ export function getLiveMatchTime(
     };
   }
 
-  // Half time: 48m to 60m (2880s to 3600s)
-  if (diffSecs < 60 * 60) {
+  // Half time: 48m to 63m (2880s to 3780s - 15 minute standard half-time)
+  if (diffSecs < 63 * 60) {
     return {
       display: "HT",
       minuteText: "HT",
@@ -78,8 +104,8 @@ export function getLiveMatchTime(
     };
   }
 
-  // Second half: starts at 60 mins after kickoff
-  const secondHalfSecs = diffSecs - 60 * 60;
+  // Second half: starts at ~63 mins after kickoff (45m 1H + 3m stoppage + 15m HT)
+  const secondHalfSecs = diffSecs - 63 * 60;
   const totalMatchSecs = 45 * 60 + secondHalfSecs;
 
   // Regular 2nd half: 45m to 90m (2700s to 5400s)
@@ -89,8 +115,8 @@ export function getLiveMatchTime(
     const display = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
     return {
       display,
-      minuteText: `${mins}'`,
-      minute: mins,
+      minuteText: `${mins + 1}'`,
+      minute: mins + 1,
       phase: "2H",
     };
   }

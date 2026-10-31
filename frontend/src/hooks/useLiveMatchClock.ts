@@ -7,25 +7,26 @@ import { getLiveMatchTime, type LiveMatchClockState } from "../lib/live-clock";
  */
 export function useLiveMatchClock(
   kickoffAt?: string | Date | null,
-  status?: string | null
+  status?: string | null,
+  actualKickoffAt?: string | Date | null
 ): LiveMatchClockState {
   const [clock, setClock] = useState<LiveMatchClockState>(() =>
-    getLiveMatchTime(kickoffAt, status)
+    getLiveMatchTime(kickoffAt, status, actualKickoffAt)
   );
 
   useEffect(() => {
     // Initial evaluation
-    setClock(getLiveMatchTime(kickoffAt, status));
+    setClock(getLiveMatchTime(kickoffAt, status, actualKickoffAt));
 
     // Only tick continuously if the match is currently LIVE
     if (status !== "LIVE") return;
 
     const interval = setInterval(() => {
-      setClock(getLiveMatchTime(kickoffAt, status));
+      setClock(getLiveMatchTime(kickoffAt, status, actualKickoffAt));
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [kickoffAt, status]);
+  }, [kickoffAt, status, actualKickoffAt]);
 
   return clock;
 }

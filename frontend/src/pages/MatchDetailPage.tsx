@@ -84,7 +84,11 @@ export function MatchDetailPage() {
   const [showWatchModal, setShowWatchModal] = useState(false);
   const [activeSubpart, setActiveSubpart] = useState<"reviews" | "potm" | "predictions">("reviews");
   const qc = useQueryClient();
-  const liveClock = useLiveMatchClock(data?.match?.kickoffAt, data?.match?.status);
+  const liveClock = useLiveMatchClock(
+    data?.match?.kickoffAt,
+    data?.match?.status,
+    data?.match?.actualKickoffAt
+  );
 
   if (isLoading) return <LoadingState label="Loading match..." />;
   if (isError || !data) return <ErrorState message="Couldn't load this match." onRetry={refetch} />;
