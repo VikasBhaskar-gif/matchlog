@@ -1,11 +1,8 @@
-import postgres from "postgres";
-import { drizzle } from "drizzle-orm/postgres-js";
-import { env } from "../lib/env.js";
 import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { getDbSsl } from "./client.js";
+import { queryClient } from "./client.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,12 +14,15 @@ export function logDb(msg: string) {
   if (dbLogs.length > 100) dbLogs.shift();
 }
 
-export async function ensureDatabaseSeeded() {
-  const sslOption = getDbSsl(env.DATABASE_URL);
-  logDb(`[DB] Seeding started. Host: ${new URL(env.DATABASE_URL).hostname}, ssl: ${JSON.stringify(sslOption)}`);
+let isSeeding = false;
 
-  const sql = postgres(env.DATABASE_URL, { max: 5, ssl: sslOption, connect_timeout: 10 });
-  const db = drizzle(sql);
+export async function ensureDatabaseSeeded() {
+  if (isSeeding) {
+    logDb("[DB] Seeding already in progress, skipping concurrent run.");
+    return { ok: true, skipped: true, reason: "Already in progress" };
+  }
+  isSeeding = true;
+  logDb(`[DB] Seeding started using shared queryClient.`);
 
   try {
     // 1. Run all migrations directly without CREATE SCHEMA privilege restrictions
@@ -41,17 +41,20 @@ export async function ensureDatabaseSeeded() {
       const files = fs.readdirSync(migrationsFolder).filter((f) => f.endsWith(".sql")).sort();
       let executed = 0;
       for (const file of files) {
+        logDb(`[DB] Migrating: ${file}`);
         const content = fs.readFileSync(path.join(migrationsFolder, file), "utf-8");
         const stmts = content
           .split("--> statement-breakpoint")
           .map((s) => s.trim())
           .filter((s) => s.length > 0);
-        for (const s of stmts) {
+        for (let i = 0; i < stmts.length; i++) {
           try {
-            await sql.unsafe(s);
+            await queryClient.unsafe(stmts[i]);
             executed++;
-          } catch (e) {
-            // Ignore already exists notices
+          } catch (e: any) {
+            if (!e.message?.includes("already exists")) {
+              logDb(`[DB] Notice in ${file} stmt ${i}: ${e.message}`);
+            }
           }
         }
       }
@@ -62,7 +65,7 @@ export async function ensureDatabaseSeeded() {
 
     // Ensure display_name column exists if dump references it
     try {
-      await sql.unsafe(`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "display_name" text;`);
+      await queryClient.unsafe(`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "display_name" text;`);
     } catch {}
 
     // 2. Check if VikasBhaskar, teams, and matches already exist
@@ -70,10 +73,10 @@ export async function ensureDatabaseSeeded() {
     let teamCount = 0;
     let matchCount = 0;
     try {
-      vikasExists = await sql`SELECT id FROM users WHERE username = 'VikasBhaskar'`;
-      const teamsExist = await sql`SELECT count(*) FROM teams`;
+      vikasExists = await queryClient`SELECT id FROM users WHERE username = 'VikasBhaskar'`;
+      const teamsExist = await queryClient`SELECT count(*) FROM teams`;
       teamCount = parseInt(teamsExist[0]?.count ?? "0", 10);
-      const matchesExist = await sql`SELECT count(*) FROM matches`;
+      const matchesExist = await queryClient`SELECT count(*) FROM matches`;
       matchCount = parseInt(matchesExist[0]?.count ?? "0", 10);
       logDb(`[DB] Counts: vikas=${vikasExists.length}, teams=${teamCount}, matches=${matchCount}`);
     } catch (checkErr: any) {
@@ -84,9 +87,9 @@ export async function ensureDatabaseSeeded() {
 
     if (vikasExists.length > 0 && teamCount > 50 && matchCount > 500) {
       logDb("[DB] Database already contains VikasBhaskar, teams, and matches. Ensuring password is up to date.");
-      await sql`UPDATE users SET password_hash = ${vikasHash} WHERE username = 'VikasBhaskar'`;
+      await queryClient`UPDATE users SET password_hash = ${vikasHash} WHERE username = 'VikasBhaskar'`;
       try {
-        const purged = await sql`DELETE FROM match_events WHERE external_id LIKE 'gen:goal:%'`;
+        const purged = await queryClient`DELETE FROM match_events WHERE external_id LIKE 'gen:goal:%'`;
         if (purged.count > 0) {
           logDb(`[DB] Purged ${purged.count} legacy gen:goal pseudo-events from database.`);
         }
@@ -177,7 +180,7 @@ export async function ensureDatabaseSeeded() {
       try {
         for (let i = 0; i < stmts.length; i += batchSize) {
           const batch = stmts.slice(i, i + batchSize).join("\n");
-          await sql.unsafe(batch);
+          await queryClient.unsafe(batch);
         }
         totalImported += stmts.length;
       } catch (tableErr: any) {
@@ -187,14 +190,14 @@ export async function ensureDatabaseSeeded() {
 
     logDb(`[DB] Successfully imported ${totalImported} statements across all tables!`);
 
-    await sql`UPDATE users SET password_hash = ${vikasHash} WHERE username = 'VikasBhaskar'`;
+    await queryClient`UPDATE users SET password_hash = ${vikasHash} WHERE username = 'VikasBhaskar'`;
     console.log("[DB] Ensured VikasBhaskar password is set to amaterasu17.");
 
     // Ensure default friends and bilateral friendships exist
     try {
-      const chelsea = await sql`SELECT id FROM teams WHERE name ILIKE '%chelsea%' LIMIT 1`;
+      const chelsea = await queryClient`SELECT id FROM teams WHERE name ILIKE '%chelsea%' LIMIT 1`;
       const chelseaId = chelsea[0]?.id;
-      const vikas = await sql`SELECT id FROM users WHERE username = 'VikasBhaskar' LIMIT 1`;
+      const vikas = await queryClient`SELECT id FROM users WHERE username = 'VikasBhaskar' LIMIT 1`;
       if (vikas.length > 0) {
         const vikasId = vikas[0].id;
         const defaultFriends = [
@@ -205,10 +208,10 @@ export async function ensureDatabaseSeeded() {
           { username: "ved", supportedTeamId: null },
         ];
         for (const f of defaultFriends) {
-          const existing = await sql`SELECT id FROM users WHERE username = ${f.username}`;
+          const existing = await queryClient`SELECT id FROM users WHERE username = ${f.username}`;
           let friendId = existing[0]?.id;
           if (!friendId) {
-            const ins = await sql`
+            const ins = await queryClient`
               INSERT INTO users (id, username, password_hash, supported_team_id, onboarding_completed, created_at, updated_at)
               VALUES (gen_random_uuid(), ${f.username}, ${vikasHash}, ${f.supportedTeamId ?? null}, true, NOW(), NOW())
               RETURNING id
@@ -217,7 +220,7 @@ export async function ensureDatabaseSeeded() {
           }
           if (friendId) {
             const [uA, uB] = [vikasId, friendId].sort();
-            await sql`
+            await queryClient`
               INSERT INTO friendships (id, user_a_id, user_b_id, created_at)
               VALUES (gen_random_uuid(), ${uA}, ${uB}, NOW())
               ON CONFLICT DO NOTHING
@@ -235,7 +238,7 @@ export async function ensureDatabaseSeeded() {
     console.error("[DB] Migration / seeding error:", err);
     throw err;
   } finally {
-    await sql.end();
+    isSeeding = false;
   }
 }
 

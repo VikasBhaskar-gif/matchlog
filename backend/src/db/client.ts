@@ -24,10 +24,11 @@ export function getDbSsl(rawUrl: string): false | { rejectUnauthorized: boolean 
 
 const sslOption = getDbSsl(env.DATABASE_URL);
 
-const queryClient = postgres(env.DATABASE_URL, {
+export const queryClient = postgres(env.DATABASE_URL, {
   max: 10,
   ssl: sslOption,
   connect_timeout: 10,
+  idle_timeout: 20,
 });
 
 export const db = drizzle(queryClient, { schema });

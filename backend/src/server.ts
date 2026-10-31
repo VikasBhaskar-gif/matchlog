@@ -20,12 +20,11 @@ try {
       } catch (err) {
         app.log.error(err, "[DB] Error rescoring predictions");
       }
+      startRealtimeStatusWorker();
     })
     .catch((err) => {
       app.log.error(err, "[DB] Database seeding encountered an error");
     });
-
-  startRealtimeStatusWorker();
 } catch (err) {
   app.log.error(err);
   process.exit(1);
