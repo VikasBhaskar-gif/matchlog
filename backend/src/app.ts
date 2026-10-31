@@ -16,6 +16,7 @@ import authPlugin from "./plugins/auth.js";
 import { db } from "./db/client.js";
 import { competitions } from "./db/schema/index.js";
 import { sql } from "drizzle-orm";
+import { ensureDatabaseSeeded } from "./db/restore-dump.js";
 import authRoutes from "./routes/auth.routes.js";
 import seasonRoutes from "./routes/seasons.routes.js";
 import competitionRoutes from "./routes/competitions.routes.js";
@@ -118,6 +119,21 @@ export async function buildApp() {
   await app.register(meRoutes);
   await app.register(friendsRoutes);
   await app.register(reviewRoutes);
+
+  app.get("/api/seed-now", async () => {
+    try {
+      const res = await ensureDatabaseSeeded();
+      return { ok: true, res };
+    } catch (err: any) {
+      return {
+        ok: false,
+        error: err.message,
+        detail: err.detail,
+        hint: err.hint,
+        code: err.code,
+      };
+    }
+  });
 
   app.get("/api/health", async () => {
     let dbStatus = "ok";

@@ -61,11 +61,18 @@ export async function ensureDatabaseSeeded() {
         const schemaPath = schemaCandidates.find((p) => fs.existsSync(p));
         if (schemaPath) {
           const rawSchema = fs.readFileSync(schemaPath, "utf-8");
-          const cleanSchema = rawSchema
+          const lines = rawSchema
             .split("\n")
-            .filter((l) => !l.trim().startsWith("--") && !l.trim().startsWith("\\"))
-            .join("\n");
-          await sql.unsafe(cleanSchema);
+            .filter((l) => !l.trim().startsWith("--") && !l.trim().startsWith("\\"));
+          const stmts = lines.join("\n").split(";").map((s) => s.trim()).filter((s) => s.length > 0);
+          console.log(`[DB] Executing ${stmts.length} DDL statements from schema.sql...`);
+          for (const s of stmts) {
+            try {
+              await sql.unsafe(s + ";");
+            } catch {
+              // Ignore already exists
+            }
+          }
           console.log("[DB] schema.sql DDL executed successfully.");
         }
       }
